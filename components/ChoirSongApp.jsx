@@ -1,121 +1,19 @@
+'use client';
+
 import React, { useState, useEffect } from 'react';
-import { 
-  X, Check, Heart, BarChart3, PlusCircle, 
-  Music, Mic, ArrowRight, ListMusic, 
-  Users, Star, Search, Youtube 
-} from 'lucide-react';
+import { X, Check, Heart, BarChart3, PlusCircle, Music, Mic, ArrowRight, ListMusic, Users, Star, Search, Youtube } from 'lucide-react';
 
 /**
  * Custom Choir Icon component
  */
 const ChoirIcon = ({ size = 28, className = '' }) => {
   const musicSize = Math.max(Math.floor(size * 0.4), 12);
-  return (
-    <div className={`relative inline-block ${className}`}>
-      <Users size={size} className="text-indigo-600" />
-      <div className="absolute -top-1.5 -right-1.5 bg-white rounded-full p-1 shadow-md">
-        <Music size={musicSize} className="text-indigo-600" />
-      </div>
-    </div>
-  );
-};
-
-/**
- * Input field component with icon
- */
-const InputField = ({ 
-  id, label, value, onChange, placeholder, 
-  icon: Icon, type = "text", multiline = false, rows = 3 
-}) => {
-  return (
-    <div className="mb-4">
-      <label htmlFor={id} className="block text-sm font-medium text-gray-700 mb-1.5 flex items-center">
-        {Icon && <Icon size={16} className="mr-2 text-indigo-500" />}
-        {label}
-      </label>
-      {multiline ? (
-        <textarea
-          id={id}
-          className="w-full px-4 py-3 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all duration-200"
-          value={value}
-          onChange={onChange}
-          placeholder={placeholder}
-          rows={rows}
-        />
-      ) : (
-        <div className="relative">
-          <input
-            type={type}
-            id={id}
-            className="w-full px-4 py-3 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all duration-200"
-            value={value}
-            onChange={onChange}
-            placeholder={placeholder}
-          />
-        </div>
-      )}
-    </div>
-  );
-};
-
-/**
- * Tab button component
- */
-const TabButton = ({ active, onClick, icon: Icon, label }) => {
-  return (
-    <button
-      className={`py-2.5 px-4 rounded-lg transition-all duration-200 flex items-center justify-center ${
-        active 
-          ? 'bg-indigo-600 text-white shadow-md' 
-          : 'bg-white text-gray-700 hover:bg-gray-100'
-      }`}
-      onClick={onClick}
-    >
-      {Icon && <Icon size={18} className={active ? "mr-1.5" : "mr-1.5"} />}
-      <span className="font-medium">{label}</span>
-    </button>
-  );
-};
-
-/**
- * Song card component
- */
-const SongCard = ({ song, onVote, currentUser }) => {
-  const hasVoted = song.voters?.includes(currentUser);
   
   return (
-    <div className="bg-white rounded-xl shadow-md overflow-hidden border border-gray-100 hover:shadow-lg transition-all duration-200">
-      <div className="p-4">
-        <div className="flex justify-between items-start">
-          <div className="flex-1 min-w-0">
-            <h3 className="font-semibold text-gray-800 text-lg truncate">{song.title}</h3>
-            <p className="text-gray-600 truncate">{song.artist}</p>
-            {song.notes && (
-              <p className="text-gray-500 text-sm mt-2 border-t border-gray-100 pt-2">{song.notes}</p>
-            )}
-            <p className="text-xs text-gray-400 mt-2 flex items-center">
-              <Mic size={12} className="mr-1" />
-              Suggested by: {song.suggestedBy}
-            </p>
-          </div>
-          <div className="flex flex-col items-center ml-4">
-            <div className="bg-indigo-50 text-indigo-700 rounded-full h-9 w-9 flex items-center justify-center font-bold shadow-sm text-lg">
-              {song.votes}
-            </div>
-            <button 
-              className={`mt-2 rounded-full px-4 py-1.5 text-sm font-medium flex items-center ${
-                hasVoted
-                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                  : 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-700 hover:to-purple-700 shadow-sm'
-              }`}
-              onClick={() => onVote(song.id)}
-              disabled={hasVoted}
-            >
-              <Heart size={14} className="mr-1.5" fill={hasVoted ? "#9CA3AF" : "white"} />
-              {hasVoted ? 'Voted' : 'Vote'}
-            </button>
-          </div>
-        </div>
+    <div style={{position: 'relative', display: 'inline-block', ...className}}>
+      <Users size={size} color="#4F46E5" />
+      <div style={{position: 'absolute', top: '-6px', right: '-6px', background: 'white', borderRadius: '50%', padding: '4px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)'}}>
+        <Music size={musicSize} color="#4F46E5" />
       </div>
     </div>
   );
@@ -138,6 +36,7 @@ const ChoirSongApp = () => {
   });
   const [searchResults, setSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [selectedVideo, setSelectedVideo] = useState(null);
 
   // Load data from localStorage on mount
   useEffect(() => {
@@ -177,6 +76,19 @@ const ChoirSongApp = () => {
       localStorage.setItem('rmc_active_tab', activeTab);
     }
   }, [activeTab]);
+
+  // Auto-update YouTube search query when title or artist changes
+  useEffect(() => {
+    // Combine title and artist for the YouTube search query
+    let query = '';
+    if (newSong.title) query += newSong.title;
+    if (newSong.title && newSong.artist) query += ' ';
+    if (newSong.artist) query += newSong.artist;
+    
+    if (query !== newSong.youtubeQuery) {
+      setNewSong(prev => ({...prev, youtubeQuery: query}));
+    }
+  }, [newSong.title, newSong.artist]);
   
   // Mock login
   const handleLogin = () => {
@@ -197,14 +109,51 @@ const ChoirSongApp = () => {
   const searchYoutube = () => {
     if (newSong.youtubeQuery.trim()) {
       setIsSearching(true);
-      // Mock search results
+      // Mock search results - in a real implementation, this would call the YouTube API
       setTimeout(() => {
+        const query = newSong.youtubeQuery;
         setSearchResults([
-          { id: 'abc123', title: `${newSong.youtubeQuery} - Official Video`, thumbnail: 'https://via.placeholder.com/120x68' },
-          { id: 'def456', title: `${newSong.youtubeQuery} (Live Performance)`, thumbnail: 'https://via.placeholder.com/120x68' },
+          { 
+            id: 'abc123', 
+            title: `${query} - Official Music Video`, 
+            thumbnail: 'https://via.placeholder.com/120x68',
+            channelTitle: 'VEVO'
+          },
+          { 
+            id: 'def456', 
+            title: `${query} (Live Performance)`, 
+            thumbnail: 'https://via.placeholder.com/120x68',
+            channelTitle: 'Music Channel'
+          },
+          { 
+            id: 'ghi789', 
+            title: `${query} - Acoustic Cover`, 
+            thumbnail: 'https://via.placeholder.com/120x68',
+            channelTitle: 'Cover Music'
+          },
         ]);
         setIsSearching(false);
       }, 1000);
+    }
+  };
+
+  // Handle selecting a video from search results
+  const handleSelectVideo = (video) => {
+    setSelectedVideo(video);
+    // If there's a video title, use it for the song title if the song title is empty
+    if (video.title && !newSong.title.trim()) {
+      // Clean up the title (remove things like "- Official Video", etc)
+      let cleanTitle = video.title;
+      const suffixes = [' - Official Music Video', ' - Official Video', ' (Official Video)', ' (Lyric Video)', ' (Live Performance)'];
+      
+      for (const suffix of suffixes) {
+        if (cleanTitle.endsWith(suffix)) {
+          cleanTitle = cleanTitle.substring(0, cleanTitle.length - suffix.length);
+          break;
+        }
+      }
+      
+      setNewSong(prev => ({...prev, title: cleanTitle}));
     }
   };
   
@@ -216,6 +165,8 @@ const ChoirSongApp = () => {
         title: newSong.title,
         artist: newSong.artist,
         notes: newSong.notes,
+        youtubeVideoId: selectedVideo?.id || null,
+        youtubeTitle: selectedVideo?.title || null,
         suggestedBy: username,
         votes: 0,
         voters: []
@@ -223,6 +174,7 @@ const ChoirSongApp = () => {
       setSongs([...songs, songToAdd]);
       setNewSong({ title: '', artist: '', youtubeQuery: '', notes: '' });
       setSearchResults([]);
+      setSelectedVideo(null);
     }
   };
 
@@ -238,29 +190,42 @@ const ChoirSongApp = () => {
   // Login screen
   if (!isLoggedIn) {
     return (
-      <div className="flex min-h-screen bg-gradient-to-b from-indigo-50 to-white">
-        <div className="m-auto w-full max-w-lg px-6 py-12">
-          <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
-            <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-6 text-white">
-              <div className="flex items-center justify-center">
-                <ChoirIcon size={48} className="bg-white p-2 rounded-lg shadow-lg" />
-                <div className="ml-4">
-                  <h1 className="text-2xl font-bold">RMC Song Wishlist</h1>
-                  <p className="text-indigo-200">Share, vote, and discover new songs</p>
+      <div style={{minHeight: '100vh', display: 'flex', background: 'linear-gradient(to bottom, #F5F7FF, #FFFFFF)'}}>
+        <div style={{margin: 'auto', width: '100%', maxWidth: '480px', padding: '24px'}}>
+          <div style={{background: 'white', borderRadius: '16px', boxShadow: '0 10px 25px rgba(0,0,0,0.1)', overflow: 'hidden'}}>
+            <div style={{background: 'linear-gradient(to right, #4F46E5, #7E3AF2)', padding: '24px', color: 'white'}}>
+              <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+                <div style={{position: 'relative', display: 'inline-block', background: 'white', padding: '8px', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)'}}>
+                  <Users size={32} color="#4F46E5" />
+                  <div style={{position: 'absolute', top: '-6px', right: '-6px', background: 'white', borderRadius: '50%', padding: '4px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)'}}>
+                    <Music size={14} color="#4F46E5" />
+                  </div>
+                </div>
+                <div style={{marginLeft: '16px'}}>
+                  <h1 style={{fontSize: '24px', fontWeight: 'bold', margin: '0'}}>RMC Song Wishlist</h1>
+                  <p style={{color: '#C7D2FE', margin: '4px 0 0 0'}}>Share, vote, and discover new songs</p>
                 </div>
               </div>
             </div>
             
-            <div className="p-6">
-              <div className="mb-4">
-                <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-1.5 flex items-center">
-                  <Mic size={16} className="mr-2 text-indigo-500" />
+            <div style={{padding: '24px'}}>
+              <div style={{marginBottom: '16px'}}>
+                <label htmlFor="username" style={{display: 'flex', alignItems: 'center', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '6px'}}>
+                  <Mic size={16} style={{marginRight: '8px', color: '#4F46E5'}} />
                   Your Name
                 </label>
                 <input
                   type="text"
                   id="username"
-                  className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:outline-none transition-all duration-200"
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    border: '1px solid #E5E7EB',
+                    borderRadius: '8px',
+                    fontSize: '16px',
+                    outline: 'none',
+                    transition: 'all 0.2s',
+                  }}
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   placeholder="Enter your name"
@@ -272,14 +237,26 @@ const ChoirSongApp = () => {
               <button
                 onClick={handleLogin}
                 disabled={!username.trim()}
-                className={`w-full py-3 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all duration-200 flex items-center justify-center ${
-                  !username.trim() 
-                    ? 'bg-gray-200 text-gray-500 cursor-not-allowed' 
-                    : 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-700 hover:to-purple-700 shadow-md'
-                }`}
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontWeight: '500',
+                  cursor: username.trim() ? 'pointer' : 'not-allowed',
+                  background: username.trim() 
+                    ? 'linear-gradient(to right, #4F46E5, #7E3AF2)' 
+                    : '#E5E7EB',
+                  color: username.trim() ? 'white' : '#6B7280',
+                  boxShadow: username.trim() ? '0 4px 6px rgba(0,0,0,0.1)' : 'none',
+                  transition: 'all 0.2s',
+                }}
               >
-                <ArrowRight size={18} className="mr-2" />
-                <span className="font-medium">Enter App</span>
+                <ArrowRight size={18} style={{marginRight: '8px'}} />
+                <span>Enter App</span>
               </button>
             </div>
           </div>
@@ -289,18 +266,42 @@ const ChoirSongApp = () => {
   }
   
   return (
-    <div className="min-h-screen bg-gradient-to-b from-indigo-50 to-white pb-20">
-      <div className="max-w-lg mx-auto px-4">
-        <header className="py-4 sticky top-0 z-10 bg-white bg-opacity-95 backdrop-blur-sm border-b border-indigo-100">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center">
-              <ChoirIcon size={32} />
-              <h1 className="text-xl font-bold text-indigo-700 ml-2">RMC Song Wishlist</h1>
+    <div style={{minHeight: '100vh', background: 'linear-gradient(to bottom, #F5F7FF, #FFFFFF)', paddingBottom: '80px'}}>
+      <div style={{maxWidth: '480px', margin: '0 auto', padding: '0 16px'}}>
+        <header style={{
+          padding: '16px 0', 
+          position: 'sticky', 
+          top: 0, 
+          zIndex: 10, 
+          background: 'rgba(255, 255, 255, 0.95)', 
+          backdropFilter: 'blur(8px)',
+          borderBottom: '1px solid #EBF0FF'
+        }}>
+          <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between'}}>
+            <div style={{display: 'flex', alignItems: 'center'}}>
+              <div style={{position: 'relative', display: 'inline-block'}}>
+                <Users size={32} color="#4F46E5" />
+                <div style={{position: 'absolute', top: '-6px', right: '-6px', background: 'white', borderRadius: '50%', padding: '4px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)'}}>
+                  <Music size={14} color="#4F46E5" />
+                </div>
+              </div>
+              <h1 style={{fontSize: '20px', fontWeight: 'bold', color: '#4338CA', marginLeft: '8px'}}>RMC Song Wishlist</h1>
             </div>
-            <div className="flex items-center">
+            <div>
               <button 
                 onClick={handleLogout}
-                className="text-gray-500 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100 transition-colors"
+                style={{
+                  color: '#6B7280',
+                  padding: '8px',
+                  borderRadius: '50%',
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'all 0.2s',
+                }}
                 aria-label="Logout"
               >
                 <X size={20} />
@@ -308,71 +309,159 @@ const ChoirSongApp = () => {
             </div>
           </div>
           
-          <p className="text-indigo-600 text-sm flex items-center mt-1">
-            <Mic size={14} className="mr-1.5" />
-            <span>Logged in as: <span className="font-medium">{username}</span></span>
+          <p style={{color: '#4F46E5', fontSize: '14px', display: 'flex', alignItems: 'center', marginTop: '4px'}}>
+            <Mic size={14} style={{marginRight: '6px'}} />
+            <span>Logged in as: <span style={{fontWeight: '500'}}>{username}</span></span>
           </p>
           
           {/* Tab Navigation */}
-          <div className="flex space-x-2 mt-4">
-            <TabButton
-              active={activeTab === 'suggest'}
+          <div style={{display: 'flex', gap: '8px', marginTop: '16px'}}>
+            <button
+              style={{
+                flex: 1,
+                padding: '10px',
+                borderRadius: '8px',
+                border: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontWeight: '500',
+                background: activeTab === 'suggest' ? '#4F46E5' : 'white',
+                color: activeTab === 'suggest' ? 'white' : '#4B5563',
+                boxShadow: activeTab === 'suggest' ? '0 2px 4px rgba(0,0,0,0.1)' : '0 1px 3px rgba(0,0,0,0.05)',
+                transition: 'all 0.2s',
+                cursor: 'pointer',
+              }}
               onClick={() => setActiveTab('suggest')}
-              icon={PlusCircle}
-              label="Suggest"
-            />
-            <TabButton
-              active={activeTab === 'vote'}
+            >
+              <PlusCircle size={18} style={{marginRight: '6px'}} />
+              <span>Suggest</span>
+            </button>
+            <button
+              style={{
+                flex: 1,
+                padding: '10px',
+                borderRadius: '8px',
+                border: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontWeight: '500',
+                background: activeTab === 'vote' ? '#4F46E5' : 'white',
+                color: activeTab === 'vote' ? 'white' : '#4B5563',
+                boxShadow: activeTab === 'vote' ? '0 2px 4px rgba(0,0,0,0.1)' : '0 1px 3px rgba(0,0,0,0.05)',
+                transition: 'all 0.2s',
+                cursor: 'pointer',
+              }}
               onClick={() => setActiveTab('vote')}
-              icon={Heart}
-              label="Vote"
-            />
-            <TabButton
-              active={activeTab === 'rank'}
+            >
+              <Heart size={18} style={{marginRight: '6px'}} />
+              <span>Vote</span>
+            </button>
+            <button
+              style={{
+                flex: 1,
+                padding: '10px',
+                borderRadius: '8px',
+                border: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontWeight: '500',
+                background: activeTab === 'rank' ? '#4F46E5' : 'white',
+                color: activeTab === 'rank' ? 'white' : '#4B5563',
+                boxShadow: activeTab === 'rank' ? '0 2px 4px rgba(0,0,0,0.1)' : '0 1px 3px rgba(0,0,0,0.05)',
+                transition: 'all 0.2s',
+                cursor: 'pointer',
+              }}
               onClick={() => setActiveTab('rank')}
-              icon={BarChart3}
-              label="Rankings"
-            />
+            >
+              <BarChart3 size={18} style={{marginRight: '6px'}} />
+              <span>Rankings</span>
+            </button>
           </div>
         </header>
       
         {/* Tab Content */}
-        <div className="py-4">
+        <div style={{padding: '16px 0'}}>
           {activeTab === 'suggest' && (
-            <div className="bg-white p-6 rounded-xl shadow-md">
-              <h2 className="text-lg font-semibold mb-4 flex items-center text-gray-800">
-                <PlusCircle size={20} className="mr-2 text-indigo-500" />
+            <div style={{background: 'white', padding: '24px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)'}}>
+              <h2 style={{fontSize: '18px', fontWeight: '600', marginBottom: '16px', display: 'flex', alignItems: 'center', color: '#1F2937'}}>
+                <PlusCircle size={20} style={{marginRight: '8px', color: '#4F46E5'}} />
                 Suggest a New Song
               </h2>
               
-              <InputField 
-                id="songTitle"
-                label="Song Title"
-                value={newSong.title}
-                onChange={(e) => setNewSong({...newSong, title: e.target.value})}
-                placeholder="Enter song title"
-                icon={Music}
-              />
+              {/* Song Title */}
+              <div style={{marginBottom: '16px'}}>
+                <label htmlFor="songTitle" style={{display: 'flex', alignItems: 'center', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '6px'}}>
+                  <Music size={16} style={{marginRight: '8px', color: '#4F46E5'}} />
+                  Song Title
+                </label>
+                <input
+                  type="text"
+                  id="songTitle"
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    border: '1px solid #E5E7EB',
+                    borderRadius: '8px',
+                    fontSize: '16px',
+                    outline: 'none',
+                    transition: 'all 0.2s',
+                    backgroundColor: '#F9FAFB'
+                  }}
+                  value={newSong.title}
+                  onChange={(e) => setNewSong({...newSong, title: e.target.value})}
+                  placeholder="Enter song title"
+                />
+              </div>
               
-              <InputField 
-                id="artist"
-                label="Artist/Composer"
-                value={newSong.artist}
-                onChange={(e) => setNewSong({...newSong, artist: e.target.value})}
-                placeholder="Enter artist or composer"
-                icon={Mic}
-              />
+              {/* Artist/Composer */}
+              <div style={{marginBottom: '16px'}}>
+                <label htmlFor="artist" style={{display: 'flex', alignItems: 'center', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '6px'}}>
+                  <Mic size={16} style={{marginRight: '8px', color: '#4F46E5'}} />
+                  Artist/Composer
+                </label>
+                <input
+                  type="text"
+                  id="artist"
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    border: '1px solid #E5E7EB',
+                    borderRadius: '8px',
+                    fontSize: '16px',
+                    outline: 'none',
+                    transition: 'all 0.2s',
+                    backgroundColor: '#F9FAFB'
+                  }}
+                  value={newSong.artist}
+                  onChange={(e) => setNewSong({...newSong, artist: e.target.value})}
+                  placeholder="Enter artist or composer"
+                />
+              </div>
               
-              <div className="mb-4">
-                <label htmlFor="youtubeQuery" className="block text-sm font-medium text-gray-700 mb-1.5 flex items-center">
-                  <Youtube size={16} className="mr-2 text-indigo-500" />
+              {/* YouTube Search Section */}
+              <div style={{marginBottom: '16px'}}>
+                <label htmlFor="youtubeQuery" style={{display: 'flex', alignItems: 'center', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '6px'}}>
+                  <Youtube size={16} style={{marginRight: '8px', color: '#4F46E5'}} />
                   Find on YouTube (Optional)
                 </label>
-                <div className="flex">
+                <div style={{display: 'flex'}}>
                   <input
                     type="text"
                     id="youtubeQuery"
-                    className="flex-1 px-4 py-3 bg-white border border-gray-200 rounded-l-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all duration-200"
+                    style={{
+                      flex: 1,
+                      padding: '12px 16px',
+                      border: '1px solid #E5E7EB',
+                      borderRight: 'none',
+                      borderRadius: '8px 0 0 8px',
+                      fontSize: '16px',
+                      outline: 'none',
+                      transition: 'all 0.2s',
+                      backgroundColor: '#F9FAFB'
+                    }}
                     value={newSong.youtubeQuery}
                     onChange={(e) => setNewSong({...newSong, youtubeQuery: e.target.value})}
                     placeholder="Search for a video"
@@ -380,131 +469,337 @@ const ChoirSongApp = () => {
                   <button
                     onClick={searchYoutube}
                     disabled={!newSong.youtubeQuery.trim() || isSearching}
-                    className={`px-4 rounded-r-lg flex items-center justify-center ${
-                      !newSong.youtubeQuery.trim() || isSearching
-                        ? 'bg-gray-200 text-gray-500 cursor-not-allowed' 
-                        : 'bg-indigo-600 text-white hover:bg-indigo-700'
-                    }`}
+                    style={{
+                      padding: '0 16px',
+                      borderRadius: '0 8px 8px 0',
+                      border: '1px solid #E5E7EB',
+                      borderLeft: 'none',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      background: !newSong.youtubeQuery.trim() || isSearching ? '#F3F4F6' : '#4F46E5',
+                      color: !newSong.youtubeQuery.trim() || isSearching ? '#9CA3AF' : 'white',
+                      cursor: !newSong.youtubeQuery.trim() || isSearching ? 'not-allowed' : 'pointer',
+                    }}
                   >
                     <Search size={18} />
                   </button>
                 </div>
                 
                 {isSearching && (
-                  <div className="mt-2 text-sm text-indigo-600 flex items-center">
-                    <div className="animate-spin mr-2 h-4 w-4 border-2 border-indigo-600 border-t-transparent rounded-full"></div>
+                  <div style={{marginTop: '8px', fontSize: '14px', color: '#4F46E5', display: 'flex', alignItems: 'center'}}>
+                    <div style={{
+                      width: '16px', 
+                      height: '16px', 
+                      borderRadius: '50%', 
+                      border: '2px solid #C7D2FE', 
+                      borderTopColor: '#4F46E5',
+                      animation: 'spin 1s linear infinite',
+                      marginRight: '8px',
+                    }}></div>
                     Searching...
                   </div>
                 )}
                 
+                {/* Search Results */}
                 {searchResults.length > 0 && (
-                  <div className="mt-3 border border-gray-200 rounded-lg overflow-hidden">
-                    <h3 className="text-sm font-medium p-2 bg-gray-50 border-b border-gray-200">Search Results</h3>
-                    <div className="divide-y divide-gray-200">
-                      {searchResults.map(result => (
-                        <div key={result.id} className="p-2 hover:bg-gray-50 flex items-center cursor-pointer">
-                          <div className="w-30 h-17 bg-gray-100 flex-shrink-0 mr-3 rounded overflow-hidden">
-                            <img src={result.thumbnail} alt="" className="w-full h-full object-cover" />
+                  <div style={{marginTop: '12px', border: '1px solid #E5E7EB', borderRadius: '8px', overflow: 'hidden'}}>
+                    <div style={{padding: '8px 12px', background: '#F9FAFB', borderBottom: '1px solid #E5E7EB', fontSize: '14px', fontWeight: '500', color: '#4B5563'}}>
+                      Search Results
+                    </div>
+                    <div>
+                      {searchResults.map((result, index) => (
+                        <div 
+                          key={result.id} 
+                          style={{
+                            padding: '8px 12px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            borderBottom: index < searchResults.length - 1 ? '1px solid #F3F4F6' : 'none',
+                            background: selectedVideo?.id === result.id ? '#F3F4FF' : 'white',
+                            cursor: 'pointer',
+                            transition: 'background-color 0.2s',
+                          }}
+                          onClick={() => handleSelectVideo(result)}
+                        >
+                          <div style={{width: '120px', height: '68px', backgroundColor: '#F3F4F6', marginRight: '12px', flexShrink: 0, borderRadius: '4px', overflow: 'hidden'}}>
+                            <img src={result.thumbnail} alt="" style={{width: '100%', height: '100%', objectFit: 'cover'}} />
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm text-gray-800 truncate">{result.title}</p>
+                          <div style={{flex: 1, minWidth: 0}}>
+                            <p style={{margin: '0 0 4px 0', fontSize: '14px', fontWeight: selectedVideo?.id === result.id ? '500' : '400', color: '#1F2937', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical'}}>
+                              {result.title}
+                            </p>
+                            <p style={{margin: 0, fontSize: '12px', color: '#6B7280'}}>
+                              {result.channelTitle}
+                            </p>
                           </div>
-                          <button className="ml-2 p-1 text-indigo-600 hover:text-indigo-800">
-                            <PlusCircle size={18} />
-                          </button>
+                          {selectedVideo?.id === result.id && (
+                            <Check size={18} style={{marginLeft: '8px', color: '#4F46E5'}} />
+                          )}
                         </div>
                       ))}
                     </div>
                   </div>
                 )}
+                
+                {/* Selected Video Preview */}
+                {selectedVideo && !searchResults.length && (
+                  <div style={{
+                    marginTop: '12px',
+                    padding: '12px',
+                    background: '#F3F4FF',
+                    borderRadius: '8px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    border: '1px solid #C7D2FE'
+                  }}>
+                    <div style={{width: '100px', height: '56px', backgroundColor: '#E0E7FF', marginRight: '12px', flexShrink: 0, borderRadius: '4px', overflow: 'hidden'}}>
+                      <img src={selectedVideo.thumbnail} alt="" style={{width: '100%', height: '100%', objectFit: 'cover'}} />
+                    </div>
+                    <div style={{flex: 1, minWidth: 0}}>
+                      <p style={{margin: '0 0 4px 0', fontSize: '14px', fontWeight: '500', color: '#4338CA', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>
+                        {selectedVideo.title}
+                      </p>
+                      <p style={{margin: 0, fontSize: '12px', color: '#6B7280'}}>
+                        {selectedVideo.channelTitle}
+                      </p>
+                    </div>
+                    <button 
+                      onClick={() => setSelectedVideo(null)} 
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        padding: '4px',
+                        color: '#6B7280',
+                        cursor: 'pointer',
+                        borderRadius: '4px'
+                      }}
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                )}
               </div>
               
-              <InputField 
-                id="notes"
-                label="Additional Notes (Optional)"
-                value={newSong.notes}
-                onChange={(e) => setNewSong({...newSong, notes: e.target.value})}
-                placeholder="Any additional information"
-                icon={ListMusic}
-                multiline={true}
-              />
+              {/* Additional Notes */}
+              <div style={{marginBottom: '16px'}}>
+                <label htmlFor="notes" style={{display: 'flex', alignItems: 'center', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '6px'}}>
+                  <ListMusic size={16} style={{marginRight: '8px', color: '#4F46E5'}} />
+                  Additional Notes (Optional)
+                </label>
+                <textarea
+                  id="notes"
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    border: '1px solid #E5E7EB',
+                    borderRadius: '8px',
+                    fontSize: '16px',
+                    outline: 'none',
+                    transition: 'all 0.2s',
+                    minHeight: '100px',
+                    resize: 'vertical',
+                    backgroundColor: '#F9FAFB'
+                  }}
+                  value={newSong.notes}
+                  onChange={(e) => setNewSong({...newSong, notes: e.target.value})}
+                  placeholder="Any additional information"
+                  rows="3"
+                />
+              </div>
               
+              {/* Submit Button */}
               <button
                 onClick={handleAddSong}
                 disabled={!newSong.title || !newSong.artist}
-                className={`w-full py-3 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all duration-200 flex items-center justify-center ${
-                  (!newSong.title || !newSong.artist) 
-                    ? 'bg-gray-200 text-gray-500 cursor-not-allowed' 
-                    : 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-700 hover:to-purple-700 shadow-md'
-                }`}
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontWeight: '500',
+                  cursor: (newSong.title && newSong.artist) ? 'pointer' : 'not-allowed',
+                  background: (newSong.title && newSong.artist) 
+                    ? 'linear-gradient(to right, #4F46E5, #7E3AF2)' 
+                    : '#E5E7EB',
+                  color: (newSong.title && newSong.artist) ? 'white' : '#6B7280',
+                  boxShadow: (newSong.title && newSong.artist) ? '0 4px 6px rgba(0,0,0,0.1)' : 'none',
+                  transition: 'all 0.2s',
+                }}
               >
-                <PlusCircle size={18} className="mr-2" />
-                <span className="font-medium">Submit Song</span>
+                <PlusCircle size={18} style={{marginRight: '8px'}} />
+                <span>Submit Song</span>
               </button>
             </div>
           )}
           
           {activeTab === 'vote' && (
-            <div className="space-y-4">
-              <h2 className="text-lg font-semibold px-1 flex items-center text-gray-800">
-                <Heart size={20} className="mr-2 text-pink-500" />
+            <div>
+              <h2 style={{fontSize: '18px', fontWeight: '600', margin: '0 0 16px 4px', display: 'flex', alignItems: 'center', color: '#1F2937'}}>
+                <Heart size={20} style={{marginRight: '8px', color: '#EC4899'}} />
                 Vote for Songs
               </h2>
               
               {songs.length === 0 ? (
-                <div className="bg-white p-8 rounded-xl shadow-md text-center">
-                  <Music size={48} className="mx-auto text-indigo-300 mb-3" />
-                  <p className="text-gray-600 font-medium">No songs have been suggested yet.</p>
-                  <p className="text-gray-400 text-sm mt-1">Be the first to suggest a song!</p>
+                <div style={{background: 'white', padding: '32px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', textAlign: 'center'}}>
+                  <Music size={48} style={{margin: '0 auto 12px auto', color: '#D1D5DB'}} />
+                  <p style={{color: '#4B5563', fontWeight: '500', margin: '0'}}>No songs have been suggested yet.</p>
+                  <p style={{color: '#9CA3AF', fontSize: '14px', marginTop: '4px'}}>Be the first to suggest a song!</p>
                 </div>
               ) : (
-                <div className="space-y-4">
-                  {songs.map(song => (
-                    <SongCard 
-                      key={song.id} 
-                      song={song} 
-                      onVote={handleVote} 
-                      currentUser={username}
-                    />
-                  ))}
+                <div style={{display: 'flex', flexDirection: 'column', gap: '16px'}}>
+                  {songs.map(song => {
+                    const hasVoted = song.voters.includes(username);
+                    
+                    return (
+                      <div 
+                        key={song.id} 
+                        style={{
+                          background: 'white',
+                          borderRadius: '12px',
+                          overflow: 'hidden',
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+                          transition: 'all 0.2s',
+                        }}
+                      >
+                        <div style={{padding: '16px'}}>
+                          <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start'}}>
+                            <div style={{minWidth: 0, flex: 1}}>
+                              <h3 style={{fontSize: '16px', fontWeight: '600', color: '#1F2937', margin: '0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>{song.title}</h3>
+                              <p style={{fontSize: '14px', color: '#4B5563', margin: '4px 0 0 0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>{song.artist}</p>
+                              {song.notes && (
+                                <p style={{fontSize: '14px', color: '#6B7280', margin: '8px 0 0 0', paddingTop: '8px', borderTop: '1px solid #F3F4F6'}}>{song.notes}</p>
+                              )}
+                              {song.youtubeVideoId && (
+                                <p style={{fontSize: '13px', color: '#4F46E5', margin: '8px 0 0 0', display: 'flex', alignItems: 'center'}}>
+                                  <Youtube size={14} style={{marginRight: '4px'}} />
+                                  YouTube link available
+                                </p>
+                              )}
+                              <p style={{fontSize: '12px', color: '#9CA3AF', margin: '8px 0 0 0', display: 'flex', alignItems: 'center'}}>
+                                <Mic size={12} style={{marginRight: '4px'}} />
+                                Suggested by: {song.suggestedBy}
+                              </p>
+                            </div>
+                            <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', marginLeft: '16px'}}>
+                              <div style={{
+                                background: '#F3F4FF', 
+                                color: '#4F46E5', 
+                                borderRadius: '50%', 
+                                height: '36px', 
+                                width: '36px', 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                justifyContent: 'center', 
+                                fontWeight: 'bold',
+                                boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                                fontSize: '16px'
+                              }}>
+                                {song.votes}
+                              </div>
+                              <button 
+                                style={{
+                                  marginTop: '8px',
+                                  borderRadius: '9999px',
+                                  padding: '6px 16px',
+                                  fontSize: '14px',
+                                  fontWeight: '500',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  border: 'none',
+                                  cursor: hasVoted ? 'not-allowed' : 'pointer',
+                                  background: hasVoted
+                                    ? '#F3F4F6'
+                                    : 'linear-gradient(to right, #4F46E5, #7C3AED)',
+                                  color: hasVoted ? '#9CA3AF' : 'white',
+                                  boxShadow: hasVoted ? 'none' : '0 1px 3px rgba(0,0,0,0.1)',
+                                }}
+                                onClick={() => handleVote(song.id)}
+                                disabled={hasVoted}
+                              >
+                                <Heart size={14} style={{marginRight: '6px'}} fill={hasVoted ? "#9CA3AF" : "white"} />
+                                {hasVoted ? 'Voted' : 'Vote'}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
           )}
           
           {activeTab === 'rank' && (
-            <div className="space-y-4">
-              <h2 className="text-lg font-semibold px-1 flex items-center text-gray-800">
-                <BarChart3 size={20} className="mr-2 text-indigo-500" />
+            <div>
+              <h2 style={{fontSize: '18px', fontWeight: '600', margin: '0 0 16px 4px', display: 'flex', alignItems: 'center', color: '#1F2937'}}>
+                <BarChart3 size={20} style={{marginRight: '8px', color: '#4F46E5'}} />
                 Song Rankings
               </h2>
               
               {songs.length === 0 ? (
-                <div className="bg-white p-8 rounded-xl shadow-md text-center">
-                  <ListMusic size={48} className="mx-auto text-indigo-300 mb-3" />
-                  <p className="text-gray-600 font-medium">No songs have been suggested yet.</p>
-                  <p className="text-gray-400 text-sm mt-1">Go to the Suggest tab to add a song!</p>
+                <div style={{background: 'white', padding: '32px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', textAlign: 'center'}}>
+                  <ListMusic size={48} style={{margin: '0 auto 12px auto', color: '#D1D5DB'}} />
+                  <p style={{color: '#4B5563', fontWeight: '500', margin: '0'}}>No songs have been suggested yet.</p>
+                  <p style={{color: '#9CA3AF', fontSize: '14px', marginTop: '4px'}}>Go to the Suggest tab to add a song!</p>
                 </div>
               ) : (
-                <div className="space-y-6">
-                  <div className="bg-white p-4 rounded-xl shadow-md">
-                    <h3 className="text-sm font-medium mb-4 text-gray-700 border-b border-gray-100 pb-2">Top Songs</h3>
+                <div style={{display: 'flex', flexDirection: 'column', gap: '24px'}}>
+                  <div style={{background: 'white', padding: '16px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)'}}>
+                    <h3 style={{fontSize: '14px', fontWeight: '500', margin: '0 0 16px 0', color: '#4B5563', paddingBottom: '8px', borderBottom: '1px solid #F3F4F6'}}>Top Songs</h3>
                     {[...songs]
                       .sort((a, b) => b.votes - a.votes)
                       .map((song, index) => (
-                        <div key={song.id} className="mb-3">
-                          <div className="flex items-center">
-                            <div className="font-bold w-8 h-8 rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white flex items-center justify-center text-sm shadow-sm">
+                        <div key={song.id} style={{marginBottom: '12px'}}>
+                          <div style={{display: 'flex', alignItems: 'center'}}>
+                            <div style={{
+                              fontWeight: 'bold', 
+                              width: '32px', 
+                              height: '32px', 
+                              borderRadius: '50%', 
+                              background: 'linear-gradient(to right, #4F46E5, #7C3AED)',
+                              color: 'white',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: '14px',
+                              boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                            }}>
                               {index + 1}
                             </div>
-                            <div className="flex-1 ml-3">
+                            <div style={{marginLeft: '12px', flex: 1}}>
                               <div 
-                                className="h-10 bg-gradient-to-r from-indigo-400 to-purple-400 rounded-lg relative overflow-hidden shadow-sm transition-all duration-300" 
-                                style={{ width: `${Math.max((song.votes / Math.max(...songs.map(s => s.votes), 1)) * 100, 15)}%` }}
+                                style={{
+                                  height: '40px',
+                                  background: 'linear-gradient(to right, #818CF8, #6366F1)',
+                                  borderRadius: '8px',
+                                  position: 'relative',
+                                  overflow: 'hidden',
+                                  boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                                  transition: 'all 0.3s',
+                                  width: `${Math.max((song.votes / Math.max(...songs.map(s => s.votes), 1)) * 100, 15)}%`
+                                }}
                               >
-                                <div className="absolute inset-0 flex items-center px-3">
-                                  <span className="text-white font-medium truncate">{song.title}</span>
-                                  <div className="ml-auto bg-white text-indigo-700 rounded-full h-6 w-6 flex items-center justify-center text-xs font-bold shadow-sm">
+                                <div style={{position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', padding: '0 12px'}}>
+                                  <span style={{color: 'white', fontWeight: '500', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>{song.title}</span>
+                                  <div style={{
+                                    marginLeft: 'auto',
+                                    background: 'white',
+                                    color: '#4338CA',
+                                    borderRadius: '50%',
+                                    height: '24px',
+                                    width: '24px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontSize: '12px',
+                                    fontWeight: 'bold',
+                                    boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
+                                  }}>
                                     {song.votes}
                                   </div>
                                 </div>
@@ -516,38 +811,92 @@ const ChoirSongApp = () => {
                     }
                   </div>
                   
-                  <div className="bg-white rounded-xl shadow-md overflow-hidden">
-                    <h3 className="text-sm font-medium p-4 border-b border-gray-100 text-gray-700">
+                  <div style={{background: 'white', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.05)'}}>
+                    <h3 style={{fontSize: '14px', fontWeight: '500', margin: '0', padding: '16px', borderBottom: '1px solid #F3F4F6', color: '#4B5563'}}>
                       Detailed List
                     </h3>
-                    <div className="divide-y divide-gray-100 max-h-96 overflow-y-auto">
+                    <div style={{maxHeight: '384px', overflowY: 'auto'}}>
                       {[...songs]
                         .sort((a, b) => b.votes - a.votes)
                         .map((song, index) => (
                           <div 
                             key={song.id} 
-                            className="p-4 hover:bg-gray-50 transition-colors"
+                            style={{
+                              padding: '16px',
+                              borderBottom: index < songs.length - 1 ? '1px solid #F3F4F6' : 'none',
+                              transition: 'background-color 0.2s',
+                            }}
                           >
-                            <div className="flex items-center">
-                              <div className="font-bold w-8 h-8 rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white flex items-center justify-center text-sm shadow-sm mr-3 flex-shrink-0">
+                            <div style={{display: 'flex', alignItems: 'flex-start'}}>
+                              <div style={{
+                                fontWeight: 'bold', 
+                                width: '32px', 
+                                height: '32px', 
+                                borderRadius: '50%', 
+                                background: 'linear-gradient(to right, #4F46E5, #7C3AED)',
+                                color: 'white',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: '14px',
+                                boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                                flexShrink: 0,
+                                marginRight: '12px'
+                              }}>
                                 {index + 1}
                               </div>
-                              <div className="flex-1 min-w-0">
-                                <h4 className="font-medium text-gray-800 truncate">
+                              <div style={{minWidth: 0, flex: 1}}>
+                                <h4 style={{
+                                  fontSize: '16px',
+                                  fontWeight: '500',
+                                  color: '#1F2937',
+                                  margin: '0',
+                                  whiteSpace: 'nowrap',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis'
+                                }}>
                                   {song.title}
                                 </h4>
-                                <p className="text-sm text-gray-600 truncate">{song.artist}</p>
-                                {song.notes && (
-                                  <p className="text-xs text-gray-500 mt-1">{song.notes}</p>
+                                <p style={{
+                                  fontSize: '14px',
+                                  color: '#4B5563',
+                                  margin: '4px 0 0 0',
+                                  whiteSpace: 'nowrap',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis'
+                                }}>
+                                  {song.artist}
+                                </p>
+                                {song.youtubeVideoId && (
+                                  <p style={{fontSize: '13px', color: '#4F46E5', margin: '4px 0 0 0', display: 'flex', alignItems: 'center'}}>
+                                    <Youtube size={14} style={{marginRight: '4px'}} />
+                                    Has YouTube link
+                                  </p>
                                 )}
-                                <p className="text-xs text-gray-400 mt-1 flex items-center">
-                                  <Mic size={12} className="mr-1" />
+                                {song.notes && (
+                                  <p style={{fontSize: '13px', color: '#6B7280', margin: '4px 0 0 0'}}>
+                                    {song.notes}
+                                  </p>
+                                )}
+                                <p style={{fontSize: '12px', color: '#9CA3AF', margin: '4px 0 0 0', display: 'flex', alignItems: 'center'}}>
+                                  <Mic size={12} style={{marginRight: '4px'}} />
                                   Suggested by: {song.suggestedBy}
                                 </p>
                               </div>
-                              <div className="ml-4 bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full text-sm font-medium flex items-center shadow-sm">
-                                <Star size={14} className="mr-1 text-yellow-500" />
-                                {song.votes}
+                              <div style={{
+                                marginLeft: '12px',
+                                background: '#F3F4FF',
+                                color: '#4338CA',
+                                borderRadius: '9999px',
+                                padding: '4px 12px',
+                                fontSize: '14px',
+                                fontWeight: '500',
+                                display: 'flex',
+                                alignItems: 'center',
+                                boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                              }}>
+                                <Star size={14} style={{marginRight: '4px', color: '#FBBF24'}} />
+                                {song.votes} {song.votes === 1 ? 'vote' : 'votes'}
                               </div>
                             </div>
                           </div>
@@ -563,43 +912,86 @@ const ChoirSongApp = () => {
       </div>
       
       {/* Bottom Navigation for Mobile */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white shadow-lg border-t border-gray-200 z-10">
-        <div className="flex max-w-lg mx-auto">
+      <div style={{
+        position: 'fixed',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        background: 'white',
+        boxShadow: '0 -1px 4px rgba(0,0,0,0.1)',
+        borderTop: '1px solid #E5E7EB',
+        zIndex: 10
+      }}>
+        <div style={{display: 'flex', maxWidth: '480px', margin: '0 auto'}}>
           <button
-            className={`flex-1 py-3 flex flex-col items-center justify-center transition-colors duration-200 ${
-              activeTab === 'suggest' 
-                ? 'text-indigo-600' 
-                : 'text-gray-500 hover:text-indigo-500'
-            }`}
+            style={{
+              flex: 1,
+              padding: '12px',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'transparent',
+              border: 'none',
+              color: activeTab === 'suggest' ? '#4F46E5' : '#6B7280',
+              transition: 'color 0.2s',
+              cursor: 'pointer',
+            }}
             onClick={() => setActiveTab('suggest')}
           >
             <PlusCircle size={22} />
-            <span className="text-xs mt-1 font-medium">Suggest</span>
+            <span style={{fontSize: '12px', marginTop: '4px', fontWeight: '500'}}>Suggest</span>
           </button>
           <button
-            className={`flex-1 py-3 flex flex-col items-center justify-center transition-colors duration-200 ${
-              activeTab === 'vote' 
-                ? 'text-indigo-600' 
-                : 'text-gray-500 hover:text-indigo-500'
-            }`}
+            style={{
+              flex: 1,
+              padding: '12px',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'transparent',
+              border: 'none',
+              color: activeTab === 'vote' ? '#4F46E5' : '#6B7280',
+              transition: 'color 0.2s',
+              cursor: 'pointer',
+            }}
             onClick={() => setActiveTab('vote')}
           >
             <Heart size={22} />
-            <span className="text-xs mt-1 font-medium">Vote</span>
+            <span style={{fontSize: '12px', marginTop: '4px', fontWeight: '500'}}>Vote</span>
           </button>
           <button
-            className={`flex-1 py-3 flex flex-col items-center justify-center transition-colors duration-200 ${
-              activeTab === 'rank' 
-                ? 'text-indigo-600' 
-                : 'text-gray-500 hover:text-indigo-500'
-            }`}
+            style={{
+              flex: 1,
+              padding: '12px',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'transparent',
+              border: 'none',
+              color: activeTab === 'rank' ? '#4F46E5' : '#6B7280',
+              transition: 'color 0.2s',
+              cursor: 'pointer',
+            }}
             onClick={() => setActiveTab('rank')}
           >
             <BarChart3 size={22} />
-            <span className="text-xs mt-1 font-medium">Rankings</span>
+            <span style={{fontSize: '12px', marginTop: '4px', fontWeight: '500'}}>Rankings</span>
           </button>
         </div>
       </div>
+      
+      {/* Add CSS for animation */}
+      <style dangerouslySetInnerHTML={{
+        __html: `
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+        `
+      }} />
     </div>
   );
 };
