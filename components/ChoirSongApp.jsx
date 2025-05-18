@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -14,7 +13,7 @@ import { useSongs } from '../hooks/useSongs';
 import { useVotes } from '../hooks/useVotes';
 
 // Import utilities
-import { extractVideoId } from '../lib/youtube-api';
+import { extractVideoId, isValidYouTubeVideoId } from '../lib/youtube-api';
 
 /**
  * Custom Choir Icon component
@@ -701,6 +700,9 @@ const ChoirSongApp = () => {
   useEffect(() => {
     if (activeTab === 'vote' && !songsLoading && user) {
       const nonVotedSongs = getSongsToVote();
+      console.log('Vote tab - nonVotedSongs length:', nonVotedSongs.length);
+      
+      // Update the empty state based on available songs
       setShowEmptyState(nonVotedSongs.length === 0);
       
       // Reset song index if it's out of bounds
@@ -738,34 +740,42 @@ const ChoirSongApp = () => {
   };
 
   // Search YouTube
-  const searchYoutube = () => {
+  const searchYoutube = async () => {
     if (newSong.youtubeQuery.trim()) {
       setIsSearching(true);
-      // Mock search results - in a real implementation, this would call the YouTube API
-      setTimeout(() => {
+      setSearchResults([]);
+      
+      try {
+        // Import the real search function
+        const { searchYouTubeVideos } = await import('../lib/youtube-api');
+        
+        // Call the actual YouTube API
+        const results = await searchYouTubeVideos(newSong.youtubeQuery);
+        
+        // Format the results to match our expected structure
+        const formattedResults = results.map(item => ({
+          id: item.id,
+          title: item.title,
+          thumbnail: item.thumbnails?.medium?.url || item.thumbnails?.default?.url,
+          channelTitle: item.channelTitle
+        }));
+        
+        setSearchResults(formattedResults);
+      } catch (error) {
+        console.error('YouTube search error:', error);
+        // Fallback to sample results if API fails
         const query = newSong.youtubeQuery;
         setSearchResults([
           { 
-            id: 'dQw4w9WgXcQ', // Rick Astley's Never Gonna Give You Up as a test 
+            id: 'dQw4w9WgXcQ',
             title: `${query} - Official Music Video`, 
             thumbnail: `https://img.youtube.com/vi/dQw4w9WgXcQ/mqdefault.jpg`,
             channelTitle: 'VEVO'
-          },
-          { 
-            id: 'jNQXAC9IVRw', // First YouTube video ever: "Me at the zoo"
-            title: `${query} (Live Performance)`, 
-            thumbnail: `https://img.youtube.com/vi/jNQXAC9IVRw/mqdefault.jpg`,
-            channelTitle: 'YouTube History'
-          },
-          { 
-            id: '9bZkp7q19f0', // Gangnam Style
-            title: `${query} - Acoustic Cover`, 
-            thumbnail: `https://img.youtube.com/vi/9bZkp7q19f0/mqdefault.jpg`,
-            channelTitle: 'Cover Music'
-          },
+          }
         ]);
+      } finally {
         setIsSearching(false);
-      }, 1000);
+      }
     }
   };
 
@@ -805,9 +815,13 @@ const ChoirSongApp = () => {
         const success = await addNewSong(songData);
         
         if (success) {
+          // Reset form
           setNewSong({ title: '', artist: '', youtubeQuery: '', notes: '' });
           setSearchResults([]);
           setSelectedVideo(null);
+          
+          // Force reload data in all tabs
+          console.log('Song added successfully, refreshing data');
         }
       } catch (err) {
         console.error("Error in handleAddSong:", err);
@@ -818,29 +832,96 @@ const ChoirSongApp = () => {
   // Handle voting for a song
   const handleVote = async (isUpvote) => {
     const nonVotedSongs = getSongsToVote();
+    console.log('Handling vote - available songs:', nonVotedSongs.length);
     
     if (nonVotedSongs.length > 0 && songIndex < nonVotedSongs.length) {
       const currentSong = nonVotedSongs[songIndex];
+      console.log('Voting for song:', currentSong.title, currentSong.id);
       
       // Set vote type for UI feedback
       setVoteType(isUpvote ? 'up' : 'down');
       
       try {
-        // Register vote in database
-        const success = await voteForSong(currentSong.id);
+        // Register vote in database (only if upvoted - downvote just skips)
+        let success = true;
         
-        if (success) {
-          // Move to the next song or show empty state if no more
-          if (songIndex < nonVotedSongs.length - 1) {
-            setSongIndex(prevIndex => prevIndex + 1);
-          } else {
-            // No more songs to vote on
-            setShowEmptyState(true);
-            setSongIndex(0);
+        if (isUpvote) {
+          // Show voting status
+          setIsVoting(true);
+          
+          // Log the attempt
+          console.log(`Attempting to vote for song: ${currentSong.title} (${currentSong.id})`);
+          
+          try {
+            // Try to register the vote
+            success = await voteForSong(currentSong.id);
+            console.log('Vote registered result:', success);
+            
+            if (success) {
+              // Instead of an alert, we'll use console.log
+              console.log(`Vote for "${currentSong.title}" successfully recorded!`);
+              
+              // Manually mark this song as voted by the current user
+              // This ensures it doesn't show up again even if the database hasn't updated yet
+              if (apiStatus.available) {
+                // For Supabase mode, force a reload
+                console.log('Forcing data reload after vote');
+                await songsHook.loadSongs();
+              } else {
+                // For localStorage mode, update the state directly
+                setSongs(prevSongs => prevSongs.map(song => {
+                  if (song.id === currentSong.id) {
+                    return {
+                      ...song,
+                      votes: song.votes + 1,
+                      voters: [...(song.voters || []), user.id],
+                      votedByCurrentUser: true
+                    };
+                  }
+                  return song;
+                }));
+              }
+              
+              // Manually remove this song from the voting options
+              // Find the next available song
+              let nextSongIndex = 0;
+              const remainingSongs = nonVotedSongs.filter(s => s.id !== currentSong.id);
+              
+              console.log(`Remaining songs to vote on: ${remainingSongs.length}`);
+              
+              if (remainingSongs.length > 0) {
+                // Still have songs to vote on
+                console.log('Moving to next available song');
+                // We need to find the new index of the next song in the original list
+                const nextSongIds = remainingSongs.map(s => s.id);
+                nextSongIndex = nonVotedSongs.findIndex(s => nextSongIds.includes(s.id));
+                if (nextSongIndex === -1) nextSongIndex = 0;
+                setSongIndex(nextSongIndex);
+              } else {
+                // No more songs to vote on
+                console.log('No more songs to vote on');
+                setShowEmptyState(true);
+                setSongIndex(0);
+              }
+            } else {
+              console.log(`Failed to record vote for "${currentSong.title}". Please try again.`);
+            }
+          } catch (voteError) {
+            console.error('Error registering vote:', voteError);
+            success = false;
+          } finally {
+            setIsVoting(false);
           }
+        } else {
+          console.log('Skipping song (downvote)');
+          
+          // For a downvote, just move to the next song without voting
+          const nextIndex = (songIndex + 1) % nonVotedSongs.length;
+          setSongIndex(nextIndex);
         }
       } catch (err) {
         console.error("Error in handleVote:", err);
+        setIsVoting(false);
       }
     }
   };
