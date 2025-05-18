@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { fetchAllSongs, addSong, fetchVotesForSong } from '../lib/supabase';
-import { getYouTubeEmbedUrl, getYouTubeThumbnail } from '../lib/youtube-api';
+import { getYouTubeEmbedUrl, getYouTubeThumbnail, isValidYouTubeVideoId } from '../lib/youtube-api';
 import { supabaseClient } from '../lib/supabase';
 
 /**
@@ -25,25 +25,57 @@ export function useSongs(user) {
         // Get votes for each song
         const songsWithVotes = await Promise.all(
           songsData.map(async (song) => {
-            const votes = await fetchVotesForSong(song.id);
-            
-            // Format the song data
-            return {
-              id: song.id,
-              title: song.title,
-              artist: song.artist,
-              notes: song.notes,
-              youtubeUrl: getYouTubeEmbedUrl(song.youtube_video_id),
-              youtubeThumb: getYouTubeThumbnail(song.youtube_video_id),
-              youtubeTitle: song.youtube_title,
-              youtubeVideoId: song.youtube_video_id,
-              suggestedBy: song.users.name,
-              suggestedById: song.suggested_by,
-              votes: votes.length,
-              voters: votes.map(vote => vote.user_id),
-              votedByCurrentUser: votes.some(vote => vote.user_id === user.id),
-              createdAt: song.created_at
-            };
+            try {
+              const votes = await fetchVotesForSong(song.id);
+              
+              // Validate YouTube video ID
+              let youtubeUrl = '';
+              let youtubeThumb = '';
+              
+              if (song.youtube_video_id && isValidYouTubeVideoId(song.youtube_video_id)) {
+                youtubeUrl = getYouTubeEmbedUrl(song.youtube_video_id);
+                youtubeThumb = getYouTubeThumbnail(song.youtube_video_id);
+              } else if (song.youtube_video_id) {
+                console.warn(`Invalid YouTube ID found in song "${song.title}": ${song.youtube_video_id}`);
+              }
+              
+              // Format the song data
+              return {
+                id: song.id,
+                title: song.title,
+                artist: song.artist,
+                notes: song.notes,
+                youtubeUrl: youtubeUrl,
+                youtubeThumb: youtubeThumb,
+                youtubeTitle: song.youtube_title,
+                youtubeVideoId: isValidYouTubeVideoId(song.youtube_video_id) ? song.youtube_video_id : null,
+                suggestedBy: song.users?.name || 'Anonymous',
+                suggestedById: song.suggested_by,
+                votes: votes.length,
+                voters: votes.map(vote => vote.user_id),
+                votedByCurrentUser: votes.some(vote => vote.user_id === user.id),
+                createdAt: song.created_at
+              };
+            } catch (err) {
+              console.error(`Error processing song ${song.id}:`, err);
+              // Return a minimal valid song object if there was an error
+              return {
+                id: song.id,
+                title: song.title || 'Unknown Song',
+                artist: song.artist || 'Unknown Artist',
+                notes: song.notes || '',
+                youtubeUrl: '',
+                youtubeThumb: '',
+                youtubeTitle: '',
+                youtubeVideoId: null,
+                suggestedBy: song.users?.name || 'Anonymous',
+                suggestedById: song.suggested_by,
+                votes: 0,
+                voters: [],
+                votedByCurrentUser: false,
+                createdAt: song.created_at || new Date().toISOString()
+              };
+            }
           })
         );
         
@@ -90,6 +122,12 @@ export function useSongs(user) {
     }
     
     try {
+      // Validate YouTube video ID if present
+      if (songData.youtubeVideoId && !isValidYouTubeVideoId(songData.youtubeVideoId)) {
+        setError('Invalid YouTube video ID');
+        return null;
+      }
+      
       const newSong = await addSong({
         title: songData.title,
         artist: songData.artist,
