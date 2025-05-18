@@ -1,16 +1,19 @@
+
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   X, Check, Heart, BarChart3, PlusCircle, Music, Mic, 
   ArrowRight, ListMusic, Users, Star, Search, Youtube,
-  ThumbsUp, ThumbsDown, Volume2, ExternalLink
+  ThumbsUp, ThumbsDown, Volume2, ExternalLink, AlertTriangle
 } from 'lucide-react';
 
-// Import Supabase hooks and utilities
+// Import hooks directly - we'll conditionally use their values, not conditionally call the hooks
 import { useAuth } from '../hooks/useAuth';
 import { useSongs } from '../hooks/useSongs';
 import { useVotes } from '../hooks/useVotes';
+
+// Import utilities
 import { extractVideoId } from '../lib/youtube-api';
 
 /**
@@ -372,13 +375,312 @@ const TinderCard = ({ song, onSwipe, onCardClick }) => {
 
 /**
  * Enhanced version of the ChoirSongApp component with Supabase integration
+ * and localStorage fallback
  */
 const ChoirSongApp = () => {
-  // Use Supabase auth and data hooks
-  const { user, isLoading: authLoading, isLoggedIn, login, logout, error: authError } = useAuth();
-  const { songs, isLoading: songsLoading, addNewSong, getSongsToVote, getSortedSongs, error: songsError } = useSongs(user);
-  const { voteForSong, isVoting, error: voteError } = useVotes(user);
+  // State for Supabase connection availability
+  const [apiStatus, setApiStatus] = useState({
+    available: false,
+    checking: true,
+    error: null
+  });
+
+  // Local state for auth, songs, and votes when Supabase is unavailable
+  const [localUser, setLocalUser] = useState(null);
+  const [localSongs, setLocalSongs] = useState([]);
+  const [localVotes, setLocalVotes] = useState({});
+  const [localErrors, setLocalErrors] = useState({
+    auth: null,
+    songs: null,
+    votes: null
+  });
+
+  // Always call the hooks, but we may not use their values
+  // if we're in localStorage fallback mode
+  const authHook = useAuth();
+  const songsHook = useSongs(authHook.user);
+  const votesHook = useVotes(authHook.user);
+
+  // Check if Supabase API is available
+  useEffect(() => {
+    const checkApiAvailability = async () => {
+      try {
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+        const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+        
+        if (!supabaseUrl || !supabaseKey) {
+          console.warn('Supabase credentials not found in environment variables');
+          setApiStatus({
+            available: false,
+            checking: false,
+            error: 'Missing Supabase credentials'
+          });
+          return;
+        }
+        
+        // Try a basic fetch to see if Supabase is reachable
+        try {
+          const response = await fetch(`${supabaseUrl}/rest/v1/?apikey=${supabaseKey}`, {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+              'apikey': supabaseKey
+            }
+          });
+          
+          if (response.ok) {
+            console.log('Supabase connection successful');
+            setApiStatus({
+              available: true,
+              checking: false,
+              error: null
+            });
+          } else {
+            console.warn(`Supabase API error: ${response.status}`);
+            setApiStatus({
+              available: false,
+              checking: false,
+              error: `Supabase API error: ${response.status}`
+            });
+          }
+        } catch (err) {
+          console.error('Failed to connect to Supabase:', err);
+          setApiStatus({
+            available: false,
+            checking: false,
+            error: err.message
+          });
+        }
+      } catch (error) {
+        console.error('Failed to check API availability:', error);
+        setApiStatus({
+          available: false,
+          checking: false,
+          error: error.message
+        });
+      }
+    };
+    
+    checkApiAvailability();
+  }, []);
+
+  // Load local data from localStorage if Supabase is unavailable
+  useEffect(() => {
+    if (!apiStatus.checking && !apiStatus.available) {
+      console.log('Using localStorage fallback mode');
+      
+      // Load user
+      const storedUser = localStorage.getItem('rmc_choir_user');
+      if (storedUser) {
+        try {
+          setLocalUser(JSON.parse(storedUser));
+        } catch (e) {
+          console.error('Failed to parse stored user:', e);
+        }
+      }
+      
+      // Load songs
+      const storedSongs = localStorage.getItem('rmc_songs');
+      if (storedSongs) {
+        try {
+          setLocalSongs(JSON.parse(storedSongs));
+        } catch (e) {
+          console.error('Failed to parse stored songs:', e);
+        }
+      }
+      
+      // Load votes
+      const storedVotes = localStorage.getItem('rmc_votes');
+      if (storedVotes) {
+        try {
+          setLocalVotes(JSON.parse(storedVotes));
+        } catch (e) {
+          console.error('Failed to parse stored votes:', e);
+        }
+      }
+    }
+  }, [apiStatus.checking, apiStatus.available]);
+
+  // Determine which set of functions to use based on API status
+  const user = apiStatus.available ? authHook.user : localUser;
+  const isLoggedIn = apiStatus.available ? authHook.isLoggedIn : !!localUser;
+  const authLoading = apiStatus.available ? authHook.isLoading : false;
+  const authError = apiStatus.available ? authHook.error : localErrors.auth;
   
+  const songs = apiStatus.available ? songsHook.songs : localSongs;
+  const songsLoading = apiStatus.available ? songsHook.isLoading : false;
+  const songsError = apiStatus.available ? songsHook.error : localErrors.songs;
+  
+  const isVoting = apiStatus.available ? votesHook.isVoting : false;
+  const voteError = apiStatus.available ? votesHook.error : localErrors.votes;
+
+  // Login function
+  const login = async (username) => {
+    if (!username.trim()) {
+      const errorMsg = 'Please enter your name';
+      if (apiStatus.available) {
+        // Let the hook handle the error
+        return authHook.login(username);
+      } else {
+        setLocalErrors(prev => ({ ...prev, auth: errorMsg }));
+        return false;
+      }
+    }
+    
+    if (apiStatus.available) {
+      return authHook.login(username);
+    } else {
+      try {
+        // Create a mock user
+        const userId = 'local-' + Date.now();
+        const userData = { id: userId, name: username.trim() };
+        
+        setLocalUser(userData);
+        localStorage.setItem('rmc_choir_user', JSON.stringify(userData));
+        setLocalErrors(prev => ({ ...prev, auth: null }));
+        return true;
+      } catch (error) {
+        console.error('Local login error:', error);
+        setLocalErrors(prev => ({ ...prev, auth: 'An error occurred during login' }));
+        return false;
+      }
+    }
+  };
+  
+  // Logout function
+  const logout = () => {
+    if (apiStatus.available) {
+      authHook.logout();
+    } else {
+      setLocalUser(null);
+      localStorage.removeItem('rmc_choir_user');
+    }
+  };
+  
+  // Add song function
+  const addNewSong = async (songData) => {
+    if (!songData.title || !songData.artist || !user) {
+      const errorMsg = 'Missing song data or user';
+      if (apiStatus.available) {
+        return songsHook.addNewSong(songData);
+      } else {
+        setLocalErrors(prev => ({ ...prev, songs: errorMsg }));
+        return false;
+      }
+    }
+    
+    if (apiStatus.available) {
+      return songsHook.addNewSong(songData);
+    } else {
+      try {
+        const songId = 'local-' + Date.now();
+        const newSong = {
+          id: songId,
+          title: songData.title,
+          artist: songData.artist,
+          notes: songData.notes,
+          youtubeVideoId: songData.youtubeVideoId,
+          youtubeTitle: songData.youtubeTitle,
+          suggestedBy: localUser.name,
+          suggestedById: localUser.id,
+          votes: 0,
+          voters: [],
+          createdAt: new Date().toISOString()
+        };
+        
+        const updatedSongs = [newSong, ...localSongs];
+        setLocalSongs(updatedSongs);
+        localStorage.setItem('rmc_songs', JSON.stringify(updatedSongs));
+        setLocalErrors(prev => ({ ...prev, songs: null }));
+        return true;
+      } catch (error) {
+        console.error('Local add song error:', error);
+        setLocalErrors(prev => ({ ...prev, songs: 'Failed to add song' }));
+        return false;
+      }
+    }
+  };
+  
+  // Vote function
+  const voteForSong = async (songId) => {
+    if (!songId || !user) {
+      const errorMsg = 'Missing song ID or user';
+      if (apiStatus.available) {
+        return votesHook.voteForSong(songId);
+      } else {
+        setLocalErrors(prev => ({ ...prev, votes: errorMsg }));
+        return false;
+      }
+    }
+    
+    if (apiStatus.available) {
+      return votesHook.voteForSong(songId);
+    } else {
+      try {
+        // Check if user already voted for this song
+        const hasVoted = localSongs.some(song => 
+          song.id === songId && song.voters && song.voters.includes(localUser.id)
+        );
+        
+        if (hasVoted) {
+          setLocalErrors(prev => ({ ...prev, votes: 'You have already voted for this song' }));
+          return false;
+        }
+        
+        // Update the song's votes
+        const updatedSongs = localSongs.map(song => {
+          if (song.id === songId) {
+            return {
+              ...song,
+              votes: (song.votes || 0) + 1,
+              voters: [...(song.voters || []), localUser.id]
+            };
+          }
+          return song;
+        });
+        
+        setLocalSongs(updatedSongs);
+        localStorage.setItem('rmc_songs', JSON.stringify(updatedSongs));
+        
+        // Update local votes record
+        const updatedVotes = {
+          ...localVotes,
+          [songId]: true
+        };
+        setLocalVotes(updatedVotes);
+        localStorage.setItem('rmc_votes', JSON.stringify(updatedVotes));
+        
+        setLocalErrors(prev => ({ ...prev, votes: null }));
+        return true;
+      } catch (error) {
+        console.error('Local vote error:', error);
+        setLocalErrors(prev => ({ ...prev, votes: 'Failed to register vote' }));
+        return false;
+      }
+    }
+  };
+  
+  // Get songs that haven't been voted on yet
+  const getSongsToVote = () => {
+    if (apiStatus.available) {
+      return songsHook.getSongsToVote();
+    } else {
+      if (!localUser) return [];
+      return localSongs.filter(song => {
+        return !song.voters || !song.voters.includes(localUser.id);
+      });
+    }
+  };
+  
+  // Get songs sorted by votes
+  const getSortedSongs = () => {
+    if (apiStatus.available) {
+      return songsHook.getSortedSongs();
+    } else {
+      return [...localSongs].sort((a, b) => (b.votes || 0) - (a.votes || 0));
+    }
+  };
+
   // Local state
   const [username, setUsername] = useState('');
   const [activeTab, setActiveTab] = useState('suggest');
@@ -406,7 +708,7 @@ const ChoirSongApp = () => {
         setSongIndex(0);
       }
     }
-  }, [activeTab, songs, user, songIndex, songsLoading, getSongsToVote]);
+  }, [activeTab, songs, user, songIndex, songsLoading]);
 
   // Auto-update YouTube search query when title or artist changes
   useEffect(() => {
@@ -450,15 +752,15 @@ const ChoirSongApp = () => {
             channelTitle: 'VEVO'
           },
           { 
-            id: 'def456', 
+            id: 'jNQXAC9IVRw', // First YouTube video ever: "Me at the zoo"
             title: `${query} (Live Performance)`, 
-            thumbnail: 'https://via.placeholder.com/120x68',
-            channelTitle: 'Music Channel'
+            thumbnail: `https://img.youtube.com/vi/jNQXAC9IVRw/mqdefault.jpg`,
+            channelTitle: 'YouTube History'
           },
           { 
-            id: 'ghi789', 
+            id: '9bZkp7q19f0', // Gangnam Style
             title: `${query} - Acoustic Cover`, 
-            thumbnail: 'https://via.placeholder.com/120x68',
+            thumbnail: `https://img.youtube.com/vi/9bZkp7q19f0/mqdefault.jpg`,
             channelTitle: 'Cover Music'
           },
         ]);
@@ -545,7 +847,7 @@ const ChoirSongApp = () => {
 
   // Handle YouTube video click from the card
   const handleCardClick = (song) => {
-    if (song.youtubeVideoId) {
+    if (song.youtubeVideoId && isValidYouTubeVideoId(song.youtubeVideoId)) {
       window.open(`https://www.youtube.com/watch?v=${song.youtubeVideoId}`, '_blank');
     }
   };
@@ -572,6 +874,29 @@ const ChoirSongApp = () => {
             </div>
             
             <div style={{padding: '24px'}}>
+              {/* API Status Banner */}
+              {!apiStatus.checking && !apiStatus.available && (
+                <div style={{
+                  padding: '12px',
+                  marginBottom: '16px',
+                  backgroundColor: '#FFFBEB',
+                  borderRadius: '8px',
+                  borderLeft: '4px solid #F59E0B',
+                  color: '#92400E',
+                  display: 'flex',
+                  alignItems: 'flex-start'
+                }}>
+                  <AlertTriangle size={18} style={{ marginRight: '8px', flexShrink: 0, marginTop: '2px' }} />
+                  <div>
+                    <p style={{ margin: '0 0 4px 0', fontWeight: '600' }}>Supabase connection unavailable</p>
+                    <p style={{ margin: '0', fontSize: '14px' }}>Using local storage fallback. Your data will only be saved on this device.</p>
+                    {apiStatus.error && (
+                      <p style={{ margin: '4px 0 0 0', fontSize: '12px', opacity: 0.8 }}>Error: {apiStatus.error}</p>
+                    )}
+                  </div>
+                </div>
+              )}
+              
               {authError && (
                 <div style={{
                   padding: '12px',
@@ -701,6 +1026,25 @@ const ChoirSongApp = () => {
               </div>
               <h1 style={{fontSize: '20px', fontWeight: 'bold', color: '#4338CA', marginLeft: '8px'}}>RMC Song Wishlist</h1>
             </div>
+            
+            {/* API Status Badge */}
+            {!apiStatus.checking && !apiStatus.available && (
+              <div style={{
+                background: '#FFFBEB',
+                color: '#92400E',
+                borderRadius: '9999px',
+                padding: '4px 8px',
+                fontSize: '12px',
+                fontWeight: '500',
+                display: 'flex',
+                alignItems: 'center',
+                marginRight: '8px'
+              }}>
+                <AlertTriangle size={12} style={{ marginRight: '4px' }} />
+                Local Mode
+              </div>
+            )}
+            
             <div>
               <button 
                 onClick={logout}
@@ -807,6 +1151,26 @@ const ChoirSongApp = () => {
           </div>
         </header>
       
+        {/* API Status Banner - only when in local mode */}
+        {!apiStatus.checking && !apiStatus.available && (
+          <div style={{
+            padding: '12px',
+            margin: '0 0 16px 0',
+            backgroundColor: '#FFFBEB',
+            borderRadius: '8px',
+            borderLeft: '4px solid #F59E0B',
+            color: '#92400E',
+            display: 'flex',
+            alignItems: 'flex-start'
+          }}>
+            <AlertTriangle size={18} style={{ marginRight: '8px', flexShrink: 0, marginTop: '2px' }} />
+            <div>
+              <p style={{ margin: '0 0 4px 0', fontWeight: '600' }}>Using local storage mode</p>
+              <p style={{ margin: '0', fontSize: '14px' }}>Your data is only saved on this device. Set up Supabase in the .env.local file to enable cloud storage.</p>
+            </div>
+          </div>
+        )}
+
         {/* Tab Content */}
         <div style={{padding: '16px 0'}}>
           {activeTab === 'suggest' && (
