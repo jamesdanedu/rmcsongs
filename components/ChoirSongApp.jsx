@@ -4,6 +4,8 @@ import React, { useState, useEffect } from 'react';
 import { X, Check, Heart, BarChart3, PlusCircle, Music, Mic, ArrowRight, 
   ListMusic, Users, Star, Search, Youtube, ExternalLink } from 'lucide-react';
 import { extractVideoId, isValidYouTubeVideoId, getYouTubeThumbnail } from '../lib/youtube-api';
+// Import Supabase functions
+import { supabaseClient, getUserByName, createUser, fetchAllSongs, addSong, fetchVotesForSong, addVote } from '../lib/supabase';
 
 /**
  * Custom Choir Icon component
@@ -200,11 +202,12 @@ const YouTubeSearchResults = ({ searchQuery, onSelectVideo }) => {
  * Enhanced version of the ChoirSongApp component
  */
 const ChoirSongApp = () => {
-  // Local state for testing
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [username, setUsername] = useState('');
+  const [user, setUser] = useState(null); // Store the full user object including ID
   const [activeTab, setActiveTab] = useState('suggest');
   const [songs, setSongs] = useState([]);
+  const [loading, setLoading] = useState(false);
   const [newSong, setNewSong] = useState({
     title: '',
     artist: '',
@@ -216,58 +219,178 @@ const ChoirSongApp = () => {
   const [showYouTubeSearch, setShowYouTubeSearch] = useState(false);
   const [previewVideo, setPreviewVideo] = useState(null);
 
-  // Load data from localStorage on mount
+  // Load data and set up Supabase subscription
   useEffect(() => {
-    // Check for stored username
-    const storedUser = localStorage.getItem('rmc_username');
-    if (storedUser) {
-      setUsername(storedUser);
-      setIsLoggedIn(true);
-    }
-    
-    // Check for stored songs
-    const storedSongs = localStorage.getItem('rmc_songs');
-    if (storedSongs) {
+    // Check for logged in status from session
+    const checkUserSession = async () => {
       try {
-        setSongs(JSON.parse(storedSongs));
-      } catch (e) {
-        console.error('Failed to parse stored songs:', e);
+        // Check if we have an active session
+        const { data: { session }, error } = await supabaseClient.auth.getSession();
+        
+        if (error) {
+          console.error('Error getting session:', error);
+          return;
+        }
+        
+        if (session) {
+          // We have a session, but we still need the username
+          const user = await getUserByName(session.user.id);
+          if (user) {
+            setUsername(user.name);
+            setIsLoggedIn(true);
+          }
+        }
+      } catch (err) {
+        console.error('Session check error:', err);
       }
-    }
+    };
     
-    // Check for active tab
-    const storedTab = localStorage.getItem('rmc_active_tab');
-    if (storedTab) {
-      setActiveTab(storedTab);
+    // Check if we have a user stored in the app state already
+    if (username && isLoggedIn) {
+      fetchSongsFromSupabase();
+      
+      // Set up realtime subscriptions
+      const songsSubscription = supabaseClient
+        .channel('songs_channel')
+        .on('postgres_changes', 
+          { event: '*', schema: 'public', table: 'songs' }, 
+          () => {
+            console.log('Songs table changed, refreshing data...');
+            fetchSongsFromSupabase();
+          }
+        )
+        .subscribe();
+        
+      const votesSubscription = supabaseClient
+        .channel('votes_channel')
+        .on('postgres_changes', 
+          { event: '*', schema: 'public', table: 'votes' }, 
+          () => {
+            console.log('Votes table changed, refreshing data...');
+            fetchSongsFromSupabase();
+          }
+        )
+        .subscribe();
+      
+      // Cleanup subscriptions
+      return () => {
+        supabaseClient.removeChannel(songsSubscription);
+        supabaseClient.removeChannel(votesSubscription);
+      };
+    } else {
+      // Check if we have a stored session
+      checkUserSession();
     }
-  }, []);
+  }, [isLoggedIn, username]);
   
-  // Save data to localStorage when it changes
-  useEffect(() => {
-    if (songs.length > 0) {
-      localStorage.setItem('rmc_songs', JSON.stringify(songs));
+  // Fetch songs from Supabase
+  const fetchSongsFromSupabase = async () => {
+    try {
+      console.log('Fetching songs from Supabase...');
+      
+      // Call Supabase to fetch songs
+      const songsData = await fetchAllSongs();
+      console.log('Songs data from Supabase:', songsData);
+      
+      if (!songsData || songsData.length === 0) {
+        console.log('No songs found in database');
+        setSongs([]);
+        return;
+      }
+      
+      // Map the songs data to the expected format
+      const formattedSongs = songsData.map(song => {
+        return {
+          id: song.id,
+          title: song.title,
+          artist: song.artist,
+          notes: song.notes,
+          youtubeVideoId: song.youtube_video_id,
+          youtubeTitle: song.youtube_title,
+          youtubeUrl: song.youtube_url || (song.youtube_video_id ? `https://www.youtube.com/watch?v=${song.youtube_video_id}` : ''),
+          suggestedBy: song.suggesterName || 'Unknown',
+          suggestedById: song.suggested_by,
+          votes: song.votes_count || 0,
+          voters: song.voters || [],
+          // If we have a logged-in user, check if they've voted
+          votedByCurrentUser: user ? (song.voter_ids || []).includes(user.id) : false,
+          createdAt: song.created_at
+        };
+      });
+      
+      console.log('Processed songs with votes:', formattedSongs);
+      setSongs(formattedSongs);
+    } catch (err) {
+      console.error('Error fetching songs from Supabase:', err);
+      // Set empty array for songs
+      setSongs([]);
     }
-  }, [songs]);
+  };
   
+  // Save active tab preference
   useEffect(() => {
     if (activeTab) {
-      localStorage.setItem('rmc_active_tab', activeTab);
+      console.log('Setting active tab:', activeTab);
     }
   }, [activeTab]);
   
-  // Mock login
-  const handleLogin = () => {
+  // Handle login
+  const handleLogin = async () => {
     if (username.trim()) {
-      localStorage.setItem('rmc_username', username);
-      setIsLoggedIn(true);
+      try {
+        setLoading(true);
+        console.log('Attempting login with username:', username);
+        
+        // Check if user exists in Supabase
+        let userData;
+        try {
+          userData = await getUserByName(username.trim());
+          console.log('User data from Supabase:', userData);
+        } catch (userError) {
+          console.error('Error checking for existing user:', userError);
+          // Continue to user creation
+        }
+        
+        // Create a new user if they don't exist
+        if (!userData) {
+          console.log('Creating new user with name:', username.trim());
+          try {
+            userData = await createUser(username.trim());
+            console.log('New user created:', userData);
+          } catch (createError) {
+            console.error('Error creating user:', createError);
+            throw new Error(`Failed to create user: ${createError.message || 'Unknown error'}`);
+          }
+        }
+        
+        if (!userData || !userData.id) {
+          throw new Error('Failed to get or create user - no user data returned');
+        }
+        
+        // Store user ID for later use
+        console.log('Setting logged in state with user ID:', userData.id);
+        setUser(userData);
+        setUsername(userData.name);
+        setIsLoggedIn(true);
+        
+        // After login, fetch songs
+        await fetchSongsFromSupabase();
+      } catch (err) {
+        console.error('Login error:', err);
+        alert(`Login failed: ${err.message || 'Unknown error'}`);
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
   // Handle logout
   const handleLogout = () => {
-    localStorage.removeItem('rmc_username');
+    console.log('Logging out user');
     setIsLoggedIn(false);
     setUsername('');
+    setUser(null);
+    setSongs([]);
   };
   
   // Open YouTube search
@@ -300,41 +423,91 @@ const ChoirSongApp = () => {
     setPreviewVideo(null);
   };
   
-  // Mock add song
-  const handleAddSong = () => {
+  // Add a new song
+  const handleAddSong = async () => {
     if (newSong.title && newSong.artist) {
-      const songToAdd = {
-        id: Date.now(),
-        title: newSong.title,
-        artist: newSong.artist,
-        notes: newSong.notes,
-        youtubeVideoId: newSong.youtubeVideoId,
-        youtubeTitle: newSong.youtubeTitle,
-        youtubeUrl: newSong.youtubeUrl || (newSong.youtubeVideoId ? `https://www.youtube.com/watch?v=${newSong.youtubeVideoId}` : ''),
-        suggestedBy: username,
-        votes: 0,
-        voters: []
-      };
-      setSongs([...songs, songToAdd]);
-      setNewSong({ 
-        title: '', 
-        artist: '', 
-        notes: '',
-        youtubeVideoId: '',
-        youtubeTitle: '',
-        youtubeUrl: ''
-      });
-      setShowYouTubeSearch(false);
+      try {
+        setLoading(true);
+        console.log('Adding new song to Supabase...');
+        
+        // Ensure we have a user ID
+        if (!user || !user.id) {
+          throw new Error('User not found. Please log in again.');
+        }
+        
+        // Create song data for Supabase
+        // IMPORTANT: Only include fields that exist in your DB schema
+        const songData = {
+          title: newSong.title,
+          artist: newSong.artist,
+          notes: newSong.notes || null,
+          youtube_video_id: newSong.youtubeVideoId || null,
+          youtube_title: newSong.youtubeTitle || null,
+          suggested_by: user.id // Use the actual user ID from Supabase
+        };
+        
+        console.log('Song data being sent to Supabase:', songData);
+        
+        // Add the song to Supabase
+        const newSongData = await addSong(songData);
+        console.log('Song added successfully:', newSongData);
+        
+        // Reset form
+        setNewSong({ 
+          title: '', 
+          artist: '', 
+          notes: '',
+          youtubeVideoId: '',
+          youtubeTitle: '',
+          youtubeUrl: ''
+        });
+        setShowYouTubeSearch(false);
+        
+        // Refresh songs list from Supabase
+        await fetchSongsFromSupabase();
+        
+        // Show success message
+        alert('Song added successfully!');
+      } catch (err) {
+        console.error('Error adding song:', err);
+        alert(`Failed to add song: ${err.message}`);
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
-  // Handle voting
-  const handleVote = (songId) => {
-    setSongs(songs.map(song => 
-      song.id === songId 
-        ? { ...song, votes: song.votes + 1, voters: [...song.voters, username] }
-        : song
-    ));
+  // Handle voting for a song
+  const handleVote = async (songId) => {
+    try {
+      setLoading(true);
+      console.log(`Voting for song ID: ${songId}`);
+      
+      // Ensure we have a user ID
+      if (!user || !user.id) {
+        throw new Error('User not found. Please log in again.');
+      }
+      
+      console.log(`Adding vote with user ID: ${user.id}`);
+      
+      // Add vote to Supabase
+      await addVote(songId, user.id);
+      console.log('Vote added successfully');
+      
+      // Refresh songs list to get updated vote counts
+      await fetchSongsFromSupabase();
+    } catch (err) {
+      // Check if error is due to unique constraint (already voted)
+      if (err.code === '23505') {
+        console.log('Duplicate vote error:', err);
+        alert('You have already voted for this song');
+      } else {
+        console.error('Error voting for song:', err);
+        alert(`Failed to vote: ${err.message}`);
+      }
+    } finally {
+      setLoading(false);
+    }
   };
   
   // Login screen
@@ -473,7 +646,7 @@ const ChoirSongApp = () => {
             <div className="mb-4">
               <label htmlFor="artist" className="block text-sm font-medium text-gray-700 mb-1 flex items-center">
                 <Mic size={16} className="mr-1 text-indigo-500" />
-                Artist
+                Artist/Composer
               </label>
               <input
                 type="text"
@@ -800,6 +973,5 @@ const ChoirSongApp = () => {
     </div>
   );
 };
-
 
 export default ChoirSongApp;
