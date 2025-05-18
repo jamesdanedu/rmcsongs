@@ -1303,7 +1303,7 @@ const ChoirSongApp = () => {
               <div style={{marginBottom: '16px'}}>
                 <label htmlFor="artist" style={{display: 'flex', alignItems: 'center', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '6px'}}>
                   <Mic size={16} style={{marginRight: '8px', color: '#4F46E5'}} />
-                  Artist/Composer
+                  Artist
                 </label>
                 <input
                   type="text"
@@ -1328,7 +1328,7 @@ const ChoirSongApp = () => {
               <div style={{marginBottom: '16px'}}>
                 <label htmlFor="youtubeQuery" style={{display: 'flex', alignItems: 'center', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '6px'}}>
                   <Youtube size={16} style={{marginRight: '8px', color: '#4F46E5'}} />
-                  Find on YouTube (Optional)
+                  Link to YouTube version (Optional)
                 </label>
                 <div style={{display: 'flex'}}>
                   <input
