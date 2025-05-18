@@ -7,6 +7,12 @@ import {
   ThumbsUp, ThumbsDown, Volume2, ExternalLink
 } from 'lucide-react';
 
+// Import Supabase hooks and utilities
+import { useAuth } from '../hooks/useAuth';
+import { useSongs } from '../hooks/useSongs';
+import { useVotes } from '../hooks/useVotes';
+import { extractVideoId } from '../lib/youtube-api';
+
 /**
  * Custom Choir Icon component
  */
@@ -136,6 +142,11 @@ const TinderCard = ({ song, onSwipe, onCardClick }) => {
     }
   };
 
+  // Use thumbnail from YouTube if available
+  const youtubeThumbnail = song.youtubeVideoId 
+    ? `https://img.youtube.com/vi/${song.youtubeVideoId}/hqdefault.jpg`
+    : null;
+
   return (
     <div
       ref={cardRef}
@@ -219,10 +230,10 @@ const TinderCard = ({ song, onSwipe, onCardClick }) => {
           justifyContent: 'center',
           overflow: 'hidden',
         }}>
-          {song.youtubeVideoId ? (
+          {youtubeThumbnail ? (
             <>
               <img 
-                src={`https://img.youtube.com/vi/${song.youtubeVideoId}/hqdefault.jpg`} 
+                src={youtubeThumbnail} 
                 alt={song.title}
                 style={{
                   width: '100%',
@@ -360,14 +371,17 @@ const TinderCard = ({ song, onSwipe, onCardClick }) => {
 };
 
 /**
- * Enhanced version of the ChoirSongApp component
+ * Enhanced version of the ChoirSongApp component with Supabase integration
  */
 const ChoirSongApp = () => {
-  // Local state for testing
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  // Use Supabase auth and data hooks
+  const { user, isLoading: authLoading, isLoggedIn, login, logout, error: authError } = useAuth();
+  const { songs, isLoading: songsLoading, addNewSong, getSongsToVote, getSortedSongs, error: songsError } = useSongs(user);
+  const { voteForSong, isVoting, error: voteError } = useVotes(user);
+  
+  // Local state
   const [username, setUsername] = useState('');
   const [activeTab, setActiveTab] = useState('suggest');
-  const [songs, setSongs] = useState([]);
   const [songIndex, setSongIndex] = useState(0);
   const [newSong, setNewSong] = useState({
     title: '',
@@ -379,73 +393,20 @@ const ChoirSongApp = () => {
   const [isSearching, setIsSearching] = useState(false);
   const [selectedVideo, setSelectedVideo] = useState(null);
   const [showEmptyState, setShowEmptyState] = useState(false);
-
-  // Load data from localStorage on mount
-  useEffect(() => {
-    // Check for stored username
-    const storedUser = localStorage.getItem('rmc_username');
-    if (storedUser) {
-      setUsername(storedUser);
-      setIsLoggedIn(true);
-    }
-    
-    // Check for stored songs
-    const storedSongs = localStorage.getItem('rmc_songs');
-    if (storedSongs) {
-      try {
-        const parsedSongs = JSON.parse(storedSongs);
-        // Make sure every song has the new vote structure
-        const migratedSongs = parsedSongs.map(song => {
-          // If it's using the old vote structure, migrate it
-          if (typeof song.votes !== 'object') {
-            return {
-              ...song,
-              votes: {
-                up: song.votes || 0,
-                down: 0
-              }
-            };
-          }
-          return song;
-        });
-        setSongs(migratedSongs);
-      } catch (e) {
-        console.error('Failed to parse stored songs:', e);
-      }
-    }
-    
-    // Check for active tab
-    const storedTab = localStorage.getItem('rmc_active_tab');
-    if (storedTab) {
-      setActiveTab(storedTab);
-    }
-  }, []);
-  
-  // Save data to localStorage when it changes
-  useEffect(() => {
-    if (songs.length > 0) {
-      localStorage.setItem('rmc_songs', JSON.stringify(songs));
-    }
-  }, [songs]);
-  
-  useEffect(() => {
-    if (activeTab) {
-      localStorage.setItem('rmc_active_tab', activeTab);
-    }
-  }, [activeTab]);
+  const [voteType, setVoteType] = useState('up'); // 'up' or 'down'
 
   // Effect to check if we need to show empty state for voting
   useEffect(() => {
-    if (activeTab === 'vote') {
-      const nonVotedSongs = getNonVotedSongs();
+    if (activeTab === 'vote' && !songsLoading && user) {
+      const nonVotedSongs = getSongsToVote();
       setShowEmptyState(nonVotedSongs.length === 0);
       
       // Reset song index if it's out of bounds
-      if (songIndex >= nonVotedSongs.length) {
+      if (nonVotedSongs.length > 0 && songIndex >= nonVotedSongs.length) {
         setSongIndex(0);
       }
     }
-  }, [activeTab, songs, username, songIndex]);
+  }, [activeTab, songs, user, songIndex, songsLoading, getSongsToVote]);
 
   // Auto-update YouTube search query when title or artist changes
   useEffect(() => {
@@ -460,22 +421,21 @@ const ChoirSongApp = () => {
     }
   }, [newSong.title, newSong.artist]);
   
-  // Mock login
-  const handleLogin = () => {
+  // Handle login
+  const handleLogin = async () => {
     if (username.trim()) {
-      localStorage.setItem('rmc_username', username);
-      setIsLoggedIn(true);
+      const success = await login(username);
+      if (success) {
+        // User logged in successfully, check active tab and set initial state
+        if (activeTab === 'vote') {
+          const nonVotedSongs = getSongsToVote();
+          setShowEmptyState(nonVotedSongs.length === 0);
+        }
+      }
     }
   };
 
-  // Handle logout
-  const handleLogout = () => {
-    localStorage.removeItem('rmc_username');
-    setIsLoggedIn(false);
-    setUsername('');
-  };
-  
-  // Mock search YouTube
+  // Search YouTube
   const searchYoutube = () => {
     if (newSong.youtubeQuery.trim()) {
       setIsSearching(true);
@@ -527,78 +487,59 @@ const ChoirSongApp = () => {
     }
   };
   
-  // Mock add song
-  const handleAddSong = () => {
-    if (newSong.title && newSong.artist) {
-      const songToAdd = {
-        id: Date.now(),
+  // Add a new song
+  const handleAddSong = async () => {
+    if (newSong.title && newSong.artist && user) {
+      // IMPORTANT: Match the property names expected by addNewSong
+      const songData = {
         title: newSong.title,
         artist: newSong.artist,
         notes: newSong.notes,
         youtubeVideoId: selectedVideo?.id || null,
-        youtubeTitle: selectedVideo?.title || null,
-        suggestedBy: username,
-        votes: {
-          up: 0,
-          down: 0
-        },
-        voters: []
+        youtubeTitle: selectedVideo?.title || null
       };
-      setSongs([...songs, songToAdd]);
-      setNewSong({ title: '', artist: '', youtubeQuery: '', notes: '' });
-      setSearchResults([]);
-      setSelectedVideo(null);
+      
+      try {
+        const success = await addNewSong(songData);
+        
+        if (success) {
+          setNewSong({ title: '', artist: '', youtubeQuery: '', notes: '' });
+          setSearchResults([]);
+          setSelectedVideo(null);
+        }
+      } catch (err) {
+        console.error("Error in handleAddSong:", err);
+      }
     }
   };
 
-  // Get non-voted songs for the current user
-  const getNonVotedSongs = () => {
-    return songs.filter(song => !song.voters || !song.voters.includes(username));
-  };
-
-  // Handle swipe actions (Tinder card)
-  const handleSwipe = (isLike) => {
-    const nonVotedSongs = getNonVotedSongs();
+  // Handle voting for a song
+  const handleVote = async (isUpvote) => {
+    const nonVotedSongs = getSongsToVote();
+    
     if (nonVotedSongs.length > 0 && songIndex < nonVotedSongs.length) {
       const currentSong = nonVotedSongs[songIndex];
       
-      // Update the votes for this song
-      setSongs(prevSongs => 
-        prevSongs.map(song => {
-          if (song.id === currentSong.id) {
-            // If it's an old song without the up/down vote structure, migrate it
-            const votes = song.votes && typeof song.votes === 'object' 
-              ? { ...song.votes } 
-              : { up: song.votes || 0, down: 0 };
-            
-            // Update votes
-            if (isLike) {
-              votes.up += 1;
-            } else {
-              votes.down += 1;
-            }
-            
-            return {
-              ...song,
-              votes: votes,
-              voters: [...(song.voters || []), username]
-            };
-          }
-          return song;
-        })
-      );
+      // Set vote type for UI feedback
+      setVoteType(isUpvote ? 'up' : 'down');
       
-      // Check if we should update the index or show empty state
-      const updatedNonVotedSongs = getNonVotedSongs().filter(s => s.id !== currentSong.id);
-      if (updatedNonVotedSongs.length === 0) {
-        // No more songs to vote on
-        setShowEmptyState(true);
-        setSongIndex(0);
-      } else if (songIndex >= updatedNonVotedSongs.length) {
-        // Current index would be out of bounds, reset to 0
-        setSongIndex(0);
+      try {
+        // Register vote in database
+        const success = await voteForSong(currentSong.id);
+        
+        if (success) {
+          // Move to the next song or show empty state if no more
+          if (songIndex < nonVotedSongs.length - 1) {
+            setSongIndex(prevIndex => prevIndex + 1);
+          } else {
+            // No more songs to vote on
+            setShowEmptyState(true);
+            setSongIndex(0);
+          }
+        }
+      } catch (err) {
+        console.error("Error in handleVote:", err);
       }
-      // Otherwise keep the same index which will now point to the next song
     }
   };
 
@@ -607,17 +548,6 @@ const ChoirSongApp = () => {
     if (song.youtubeVideoId) {
       window.open(`https://www.youtube.com/watch?v=${song.youtubeVideoId}`, '_blank');
     }
-  };
-
-  // Calculate song score based on upvotes and downvotes
-  const calculateScore = (song) => {
-    // If song still uses old voting structure
-    if (typeof song.votes !== 'object') {
-      return song.votes || 0;
-    }
-    
-    // New structure with up/down votes
-    return (song.votes.up || 0) - (song.votes.down || 0);
   };
 
   // Login screen
@@ -642,6 +572,19 @@ const ChoirSongApp = () => {
             </div>
             
             <div style={{padding: '24px'}}>
+              {authError && (
+                <div style={{
+                  padding: '12px',
+                  marginBottom: '16px',
+                  backgroundColor: '#FEF2F2',
+                  borderRadius: '8px',
+                  borderLeft: '4px solid #EF4444',
+                  color: '#B91C1C'
+                }}>
+                  {authError}
+                </div>
+              )}
+              
               <div style={{marginBottom: '16px'}}>
                 <label htmlFor="username" style={{display: 'flex', alignItems: 'center', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '6px'}}>
                   <Mic size={16} style={{marginRight: '8px', color: '#4F46E5'}} />
@@ -670,7 +613,7 @@ const ChoirSongApp = () => {
               
               <button
                 onClick={handleLogin}
-                disabled={!username.trim()}
+                disabled={!username.trim() || authLoading}
                 style={{
                   width: '100%',
                   padding: '12px 16px',
@@ -680,21 +623,58 @@ const ChoirSongApp = () => {
                   alignItems: 'center',
                   justifyContent: 'center',
                   fontWeight: '500',
-                  cursor: username.trim() ? 'pointer' : 'not-allowed',
-                  background: username.trim() 
+                  cursor: username.trim() && !authLoading ? 'pointer' : 'not-allowed',
+                  background: username.trim() && !authLoading
                     ? 'linear-gradient(to right, #4F46E5, #7E3AF2)' 
                     : '#E5E7EB',
-                  color: username.trim() ? 'white' : '#6B7280',
-                  boxShadow: username.trim() ? '0 4px 6px rgba(0,0,0,0.1)' : 'none',
+                  color: username.trim() && !authLoading ? 'white' : '#6B7280',
+                  boxShadow: username.trim() && !authLoading ? '0 4px 6px rgba(0,0,0,0.1)' : 'none',
                   transition: 'all 0.2s',
                 }}
               >
-                <ArrowRight size={18} style={{marginRight: '8px'}} />
-                <span>Enter App</span>
+                {authLoading ? (
+                  <div style={{
+                    width: '20px', 
+                    height: '20px', 
+                    borderRadius: '50%', 
+                    border: '2px solid rgba(255,255,255,0.3)', 
+                    borderTopColor: 'white',
+                    animation: 'spin 1s linear infinite',
+                    marginRight: '8px',
+                  }}></div>
+                ) : (
+                  <ArrowRight size={18} style={{marginRight: '8px'}} />
+                )}
+                <span>{authLoading ? 'Logging in...' : 'Enter App'}</span>
               </button>
             </div>
           </div>
         </div>
+      </div>
+    );
+  }
+  
+  // Show loading state while songs are being loaded
+  if (songsLoading) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'linear-gradient(to bottom, #F5F7FF, #FFFFFF)'
+      }}>
+        <div style={{
+          width: '40px', 
+          height: '40px', 
+          borderRadius: '50%', 
+          border: '3px solid rgba(79, 70, 229, 0.2)', 
+          borderTopColor: '#4F46E5',
+          animation: 'spin 1s linear infinite',
+          marginBottom: '16px',
+        }}></div>
+        <p style={{color: '#4F46E5', fontWeight: '500'}}>Loading songs...</p>
       </div>
     );
   }
@@ -723,7 +703,7 @@ const ChoirSongApp = () => {
             </div>
             <div>
               <button 
-                onClick={handleLogout}
+                onClick={logout}
                 style={{
                   color: '#6B7280',
                   padding: '8px',
@@ -745,7 +725,7 @@ const ChoirSongApp = () => {
           
           <p style={{color: '#4F46E5', fontSize: '14px', display: 'flex', alignItems: 'center', marginTop: '4px'}}>
             <Mic size={14} style={{marginRight: '6px'}} />
-            <span>Logged in as: <span style={{fontWeight: '500'}}>{username}</span></span>
+            <span>Logged in as: <span style={{fontWeight: '500'}}>{user?.name}</span></span>
           </p>
           
           {/* Tab Navigation */}
@@ -791,7 +771,7 @@ const ChoirSongApp = () => {
                 setActiveTab('vote');
                 
                 // Check if there are songs to vote on
-                const nonVotedSongs = getNonVotedSongs();
+                const nonVotedSongs = getSongsToVote();
                 if (nonVotedSongs.length === 0) {
                   setShowEmptyState(true);
                 } else {
@@ -835,6 +815,19 @@ const ChoirSongApp = () => {
                 <PlusCircle size={20} style={{marginRight: '8px', color: '#4F46E5'}} />
                 Suggest a New Song
               </h2>
+              
+              {songsError && (
+                <div style={{
+                  padding: '12px',
+                  marginBottom: '16px',
+                  backgroundColor: '#FEF2F2',
+                  borderRadius: '8px',
+                  borderLeft: '4px solid #EF4444',
+                  color: '#B91C1C'
+                }}>
+                  {songsError}
+                </div>
+              )}
               
               {/* Song Title */}
               <div style={{marginBottom: '16px'}}>
@@ -1056,7 +1049,7 @@ const ChoirSongApp = () => {
               {/* Submit Button */}
               <button
                 onClick={handleAddSong}
-                disabled={!newSong.title || !newSong.artist}
+                disabled={!newSong.title || !newSong.artist || songsLoading}
                 style={{
                   width: '100%',
                   padding: '12px 16px',
@@ -1066,17 +1059,29 @@ const ChoirSongApp = () => {
                   alignItems: 'center',
                   justifyContent: 'center',
                   fontWeight: '500',
-                  cursor: (newSong.title && newSong.artist) ? 'pointer' : 'not-allowed',
-                  background: (newSong.title && newSong.artist) 
+                  cursor: (newSong.title && newSong.artist && !songsLoading) ? 'pointer' : 'not-allowed',
+                  background: (newSong.title && newSong.artist && !songsLoading) 
                     ? 'linear-gradient(to right, #4F46E5, #7E3AF2)' 
                     : '#E5E7EB',
-                  color: (newSong.title && newSong.artist) ? 'white' : '#6B7280',
-                  boxShadow: (newSong.title && newSong.artist) ? '0 4px 6px rgba(0,0,0,0.1)' : 'none',
+                  color: (newSong.title && newSong.artist && !songsLoading) ? 'white' : '#6B7280',
+                  boxShadow: (newSong.title && newSong.artist && !songsLoading) ? '0 4px 6px rgba(0,0,0,0.1)' : 'none',
                   transition: 'all 0.2s',
                 }}
               >
-                <PlusCircle size={18} style={{marginRight: '8px'}} />
-                <span>Submit Song</span>
+                {songsLoading ? (
+                  <div style={{
+                    width: '20px', 
+                    height: '20px', 
+                    borderRadius: '50%', 
+                    border: '2px solid rgba(255,255,255,0.3)', 
+                    borderTopColor: 'white',
+                    animation: 'spin 1s linear infinite',
+                    marginRight: '8px',
+                  }}></div>
+                ) : (
+                  <PlusCircle size={18} style={{marginRight: '8px'}} />
+                )}
+                <span>{songsLoading ? 'Submitting...' : 'Submit Song'}</span>
               </button>
             </div>
           )}
@@ -1087,6 +1092,19 @@ const ChoirSongApp = () => {
                 <Heart size={20} style={{marginRight: '8px', color: '#EC4899'}} />
                 Swipe to Vote on Songs
               </h2>
+              
+              {voteError && (
+                <div style={{
+                  padding: '12px',
+                  marginBottom: '16px',
+                  backgroundColor: '#FEF2F2',
+                  borderRadius: '8px',
+                  borderLeft: '4px solid #EF4444',
+                  color: '#B91C1C'
+                }}>
+                  {voteError}
+                </div>
+              )}
               
               {showEmptyState ? (
                 <div style={{
@@ -1154,11 +1172,47 @@ const ChoirSongApp = () => {
                     position: 'relative',
                     margin: '0 auto',
                   }}>
-                    {getNonVotedSongs().length > 0 && songIndex < getNonVotedSongs().length && (
+                    {isVoting && (
+                      <div style={{
+                        position: 'absolute',
+                        inset: 0,
+                        backgroundColor: 'rgba(255, 255, 255, 0.8)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        zIndex: 101,
+                        borderRadius: '12px',
+                      }}>
+                        <div style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center'
+                        }}>
+                          <div style={{
+                            width: '30px', 
+                            height: '30px', 
+                            borderRadius: '50%', 
+                            border: '3px solid #EBF0FF', 
+                            borderTopColor: '#4F46E5',
+                            animation: 'spin 1s linear infinite',
+                            marginBottom: '8px',
+                          }}></div>
+                          <p style={{
+                            color: '#4F46E5', 
+                            fontWeight: '500',
+                            margin: 0
+                          }}>
+                            Recording your vote
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {getSongsToVote().length > 0 && songIndex < getSongsToVote().length && (
                       <TinderCard
-                        key={getNonVotedSongs()[songIndex].id}
-                        song={getNonVotedSongs()[songIndex]}
-                        onSwipe={handleSwipe}
+                        key={getSongsToVote()[songIndex].id}
+                        song={getSongsToVote()[songIndex]}
+                        onSwipe={handleVote}
                         onCardClick={handleCardClick}
                       />
                     )}
@@ -1185,70 +1239,66 @@ const ChoirSongApp = () => {
                 <div style={{display: 'flex', flexDirection: 'column', gap: '24px'}}>
                   <div style={{background: 'white', padding: '16px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)'}}>
                     <h3 style={{fontSize: '14px', fontWeight: '500', margin: '0 0 16px 0', color: '#4B5563', paddingBottom: '8px', borderBottom: '1px solid #F3F4F6'}}>Top Songs</h3>
-                    {[...songs]
-                      .sort((a, b) => calculateScore(b) - calculateScore(a))
-                      .map((song, index) => {
-                        const score = calculateScore(song);
-                        const upvotes = typeof song.votes === 'object' ? (song.votes.up || 0) : (song.votes || 0);
-                        const downvotes = typeof song.votes === 'object' ? (song.votes.down || 0) : 0;
-                        
-                        return (
-                          <div key={song.id} style={{marginBottom: '12px'}}>
-                            <div style={{display: 'flex', alignItems: 'center'}}>
-                              <div style={{
-                                fontWeight: 'bold', 
-                                width: '32px', 
-                                height: '32px', 
-                                borderRadius: '50%', 
-                                background: 'linear-gradient(to right, #4F46E5, #7C3AED)',
-                                color: 'white',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontSize: '14px',
-                                boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-                              }}>
-                                {index + 1}
-                              </div>
-                              <div style={{marginLeft: '12px', flex: 1}}>
-                                <div 
-                                  style={{
-                                    height: '40px',
-                                    background: 'linear-gradient(to right, #818CF8, #6366F1)',
-                                    borderRadius: '8px',
-                                    position: 'relative',
-                                    overflow: 'hidden',
-                                    boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-                                    transition: 'all 0.3s',
-                                    width: `${Math.max((score / Math.max(...songs.map(s => calculateScore(s)), 1)) * 100, 15)}%`
-                                  }}
-                                >
-                                  <div style={{position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', padding: '0 12px'}}>
-                                    <span style={{color: 'white', fontWeight: '500', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>{song.title}</span>
-                                    <div style={{
-                                      marginLeft: 'auto',
-                                      background: 'white',
-                                      color: '#4338CA',
-                                      borderRadius: '50%',
-                                      height: '24px',
-                                      width: '24px',
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      justifyContent: 'center',
-                                      fontSize: '12px',
-                                      fontWeight: 'bold',
-                                      boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
-                                    }}>
-                                      {score}
-                                    </div>
+                    {getSortedSongs().map((song, index) => {
+                      const maxVotes = Math.max(...getSortedSongs().map(s => s.votes), 1);
+                      const percentage = Math.max((song.votes / maxVotes) * 100, 15);
+                      
+                      return (
+                        <div key={song.id} style={{marginBottom: '12px'}}>
+                          <div style={{display: 'flex', alignItems: 'center'}}>
+                            <div style={{
+                              fontWeight: 'bold', 
+                              width: '32px', 
+                              height: '32px', 
+                              borderRadius: '50%', 
+                              background: 'linear-gradient(to right, #4F46E5, #7C3AED)',
+                              color: 'white',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: '14px',
+                              boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                            }}>
+                              {index + 1}
+                            </div>
+                            <div style={{marginLeft: '12px', flex: 1}}>
+                              <div 
+                                style={{
+                                  height: '40px',
+                                  background: 'linear-gradient(to right, #818CF8, #6366F1)',
+                                  borderRadius: '8px',
+                                  position: 'relative',
+                                  overflow: 'hidden',
+                                  boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                                  transition: 'all 0.3s',
+                                  width: `${percentage}%`
+                                }}
+                              >
+                                <div style={{position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', padding: '0 12px'}}>
+                                  <span style={{color: 'white', fontWeight: '500', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>{song.title}</span>
+                                  <div style={{
+                                    marginLeft: 'auto',
+                                    background: 'white',
+                                    color: '#4338CA',
+                                    borderRadius: '50%',
+                                    height: '24px',
+                                    width: '24px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontSize: '12px',
+                                    fontWeight: 'bold',
+                                    boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
+                                  }}>
+                                    {song.votes}
                                   </div>
                                 </div>
                               </div>
                             </div>
                           </div>
-                        );
-                      })
-                    }
+                        </div>
+                      );
+                    })}
                   </div>
                   
                   <div style={{background: 'white', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.05)'}}>
@@ -1256,125 +1306,91 @@ const ChoirSongApp = () => {
                       Detailed List
                     </h3>
                     <div style={{maxHeight: '384px', overflowY: 'auto'}}>
-                      {[...songs]
-                        .sort((a, b) => calculateScore(b) - calculateScore(a))
-                        .map((song, index) => {
-                          const score = calculateScore(song);
-                          const upvotes = typeof song.votes === 'object' ? (song.votes.up || 0) : (song.votes || 0);
-                          const downvotes = typeof song.votes === 'object' ? (song.votes.down || 0) : 0;
-                          
-                          return (
-                            <div 
-                              key={song.id} 
-                              style={{
-                                padding: '16px',
-                                borderBottom: index < songs.length - 1 ? '1px solid #F3F4F6' : 'none',
-                                transition: 'background-color 0.2s',
-                              }}
-                            >
-                              <div style={{display: 'flex', alignItems: 'flex-start'}}>
-                                <div style={{
-                                  fontWeight: 'bold', 
-                                  width: '32px', 
-                                  height: '32px', 
-                                  borderRadius: '50%', 
-                                  background: 'linear-gradient(to right, #4F46E5, #7C3AED)',
-                                  color: 'white',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  fontSize: '14px',
-                                  boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-                                  flexShrink: 0,
-                                  marginRight: '12px'
-                                }}>
-                                  {index + 1}
-                                </div>
-                                <div style={{minWidth: 0, flex: 1}}>
-                                  <h4 style={{
-                                    fontSize: '16px',
-                                    fontWeight: '500',
-                                    color: '#1F2937',
-                                    margin: '0',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                  }}>
-                                    {song.title}
-                                    {song.youtubeVideoId && (
-                                      <a 
-                                        href={`https://www.youtube.com/watch?v=${song.youtubeVideoId}`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        style={{
-                                          color: '#4F46E5',
-                                          marginLeft: '8px',
-                                          display: 'inline-flex',
-                                        }}
-                                      >
-                                        <ExternalLink size={14} />
-                                      </a>
-                                    )}
-                                  </h4>
-                                  <p style={{
-                                    fontSize: '14px',
-                                    color: '#4B5563',
-                                    margin: '4px 0 0 0',
-                                    whiteSpace: 'nowrap',
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis'
-                                  }}>
-                                    {song.artist}
-                                  </p>
-                                  <div style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    margin: '10px 0 4px',
-                                  }}>
-                                    <div style={{
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      fontSize: '13px',
-                                      color: '#10B981',
-                                      marginRight: '12px',
-                                    }}>
-                                      <ThumbsUp size={14} style={{marginRight: '4px'}} />
-                                      {upvotes}
-                                    </div>
-                                    <div style={{
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      fontSize: '13px',
-                                      color: '#EF4444',
-                                    }}>
-                                      <ThumbsDown size={14} style={{marginRight: '4px'}} />
-                                      {downvotes}
-                                    </div>
-                                  </div>
-                                  <p style={{fontSize: '12px', color: '#9CA3AF', margin: '4px 0 0 0', display: 'flex', alignItems: 'center'}}>
-                                    <Mic size={12} style={{marginRight: '4px'}} />
-                                    Suggested by: {song.suggestedBy}
-                                  </p>
-                                </div>
-                                <div style={{
-                                  marginLeft: '12px',
-                                  background: '#F3F4FF',
-                                  color: '#4338CA',
-                                  borderRadius: '9999px',
-                                  padding: '4px 12px',
-                                  fontSize: '14px',
-                                  fontWeight: '500',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-                                }}>
-                                  <Star size={14} style={{marginRight: '4px', color: '#FBBF24'}} />
-                                  {score}
-                                </div>
-                              </div>
+                      {getSortedSongs().map((song, index) => (
+                        <div 
+                          key={song.id} 
+                          style={{
+                            padding: '16px',
+                            borderBottom: index < songs.length - 1 ? '1px solid #F3F4F6' : 'none',
+                            transition: 'background-color 0.2s',
+                          }}
+                        >
+                          <div style={{display: 'flex', alignItems: 'flex-start'}}>
+                            <div style={{
+                              fontWeight: 'bold', 
+                              width: '32px', 
+                              height: '32px', 
+                              borderRadius: '50%', 
+                              background: 'linear-gradient(to right, #4F46E5, #7C3AED)',
+                              color: 'white',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: '14px',
+                              boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                              flexShrink: 0,
+                              marginRight: '12px'
+                            }}>
+                              {index + 1}
                             </div>
-                          );
-                        })
-                      }
+                            <div style={{minWidth: 0, flex: 1}}>
+                              <h4 style={{
+                                fontSize: '16px',
+                                fontWeight: '500',
+                                color: '#1F2937',
+                                margin: '0',
+                                display: 'flex',
+                                alignItems: 'center',
+                              }}>
+                                {song.title}
+                                {song.youtubeVideoId && (
+                                  <a 
+                                    href={`https://www.youtube.com/watch?v=${song.youtubeVideoId}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    style={{
+                                      color: '#4F46E5',
+                                      marginLeft: '8px',
+                                      display: 'inline-flex',
+                                    }}
+                                  >
+                                    <ExternalLink size={14} />
+                                  </a>
+                                )}
+                              </h4>
+                              <p style={{
+                                fontSize: '14px',
+                                color: '#4B5563',
+                                margin: '4px 0 0 0',
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis'
+                              }}>
+                                {song.artist}
+                              </p>
+                              <p style={{fontSize: '12px', color: '#9CA3AF', margin: '4px 0 0 0', display: 'flex', alignItems: 'center'}}>
+                                <Mic size={12} style={{marginRight: '4px'}} />
+                                Suggested by: {song.suggestedBy}
+                              </p>
+                            </div>
+                            <div style={{
+                              marginLeft: '12px',
+                              background: '#F3F4FF',
+                              color: '#4338CA',
+                              borderRadius: '9999px',
+                              padding: '4px 12px',
+                              fontSize: '14px',
+                              fontWeight: '500',
+                              display: 'flex',
+                              alignItems: 'center',
+                              boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                            }}>
+                              <Star size={14} style={{marginRight: '4px', color: '#FBBF24'}} />
+                              {song.votes}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 </div>
@@ -1433,12 +1449,14 @@ const ChoirSongApp = () => {
               setActiveTab('vote');
               
               // Check if there are songs to vote on
-              const nonVotedSongs = getNonVotedSongs();
-              if (nonVotedSongs.length === 0) {
-                setShowEmptyState(true);
-              } else {
-                setShowEmptyState(false);
-                setSongIndex(0); // Reset to first song
+              if (!songsLoading && user) {
+                const nonVotedSongs = getSongsToVote();
+                if (nonVotedSongs.length === 0) {
+                  setShowEmptyState(true);
+                } else {
+                  setShowEmptyState(false);
+                  setSongIndex(0); // Reset to first song
+                }
               }
             }}
           >
