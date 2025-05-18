@@ -393,7 +393,22 @@ const ChoirSongApp = () => {
     const storedSongs = localStorage.getItem('rmc_songs');
     if (storedSongs) {
       try {
-        setSongs(JSON.parse(storedSongs));
+        const parsedSongs = JSON.parse(storedSongs);
+        // Make sure every song has the new vote structure
+        const migratedSongs = parsedSongs.map(song => {
+          // If it's using the old vote structure, migrate it
+          if (typeof song.votes !== 'object') {
+            return {
+              ...song,
+              votes: {
+                up: song.votes || 0,
+                down: 0
+              }
+            };
+          }
+          return song;
+        });
+        setSongs(migratedSongs);
       } catch (e) {
         console.error('Failed to parse stored songs:', e);
       }
@@ -422,14 +437,15 @@ const ChoirSongApp = () => {
   // Effect to check if we need to show empty state for voting
   useEffect(() => {
     if (activeTab === 'vote') {
-      if (songs.length === 0) {
-        setShowEmptyState(true);
-      } else {
-        const notVotedSongs = songs.filter(song => !song.voters || !song.voters.includes(username));
-        setShowEmptyState(notVotedSongs.length === 0);
+      const nonVotedSongs = getNonVotedSongs();
+      setShowEmptyState(nonVotedSongs.length === 0);
+      
+      // Reset song index if it's out of bounds
+      if (songIndex >= nonVotedSongs.length) {
+        setSongIndex(0);
       }
     }
-  }, [activeTab, songs, username]);
+  }, [activeTab, songs, username, songIndex]);
 
   // Auto-update YouTube search query when title or artist changes
   useEffect(() => {
@@ -543,7 +559,7 @@ const ChoirSongApp = () => {
   // Handle swipe actions (Tinder card)
   const handleSwipe = (isLike) => {
     const nonVotedSongs = getNonVotedSongs();
-    if (nonVotedSongs.length > 0) {
+    if (nonVotedSongs.length > 0 && songIndex < nonVotedSongs.length) {
       const currentSong = nonVotedSongs[songIndex];
       
       // Update the votes for this song
@@ -572,13 +588,17 @@ const ChoirSongApp = () => {
         })
       );
       
-      // Move to the next song or show empty state if no more
-      if (songIndex < nonVotedSongs.length - 1) {
-        setSongIndex(songIndex + 1);
-      } else {
-        setSongIndex(0);
+      // Check if we should update the index or show empty state
+      const updatedNonVotedSongs = getNonVotedSongs().filter(s => s.id !== currentSong.id);
+      if (updatedNonVotedSongs.length === 0) {
+        // No more songs to vote on
         setShowEmptyState(true);
+        setSongIndex(0);
+      } else if (songIndex >= updatedNonVotedSongs.length) {
+        // Current index would be out of bounds, reset to 0
+        setSongIndex(0);
       }
+      // Otherwise keep the same index which will now point to the next song
     }
   };
 
@@ -769,8 +789,15 @@ const ChoirSongApp = () => {
               }}
               onClick={() => {
                 setActiveTab('vote');
-                setSongIndex(0);
-                setShowEmptyState(getNonVotedSongs().length === 0);
+                
+                // Check if there are songs to vote on
+                const nonVotedSongs = getNonVotedSongs();
+                if (nonVotedSongs.length === 0) {
+                  setShowEmptyState(true);
+                } else {
+                  setShowEmptyState(false);
+                  setSongIndex(0); // Reset to first song
+                }
               }}
             >
               <Heart size={18} style={{marginRight: '6px'}} />
@@ -1127,7 +1154,7 @@ const ChoirSongApp = () => {
                     position: 'relative',
                     margin: '0 auto',
                   }}>
-                    {getNonVotedSongs().length > 0 && (
+                    {getNonVotedSongs().length > 0 && songIndex < getNonVotedSongs().length && (
                       <TinderCard
                         key={getNonVotedSongs()[songIndex].id}
                         song={getNonVotedSongs()[songIndex]}
@@ -1404,8 +1431,15 @@ const ChoirSongApp = () => {
             }}
             onClick={() => {
               setActiveTab('vote');
-              setSongIndex(0);
-              setShowEmptyState(getNonVotedSongs().length === 0);
+              
+              // Check if there are songs to vote on
+              const nonVotedSongs = getNonVotedSongs();
+              if (nonVotedSongs.length === 0) {
+                setShowEmptyState(true);
+              } else {
+                setShowEmptyState(false);
+                setSongIndex(0); // Reset to first song
+              }
             }}
           >
             <Heart size={22} />
