@@ -473,7 +473,7 @@ const ChoirSongApp = () => {
             <div className="mb-4">
               <label htmlFor="artist" className="block text-sm font-medium text-gray-700 mb-1 flex items-center">
                 <Mic size={16} className="mr-1 text-indigo-500" />
-                Artist/Composer
+                Artist
               </label>
               <input
                 type="text"
