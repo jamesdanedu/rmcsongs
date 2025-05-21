@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { UserPlus, Music } from 'lucide-react';
 
@@ -12,8 +11,10 @@ const ChoirIcon = ({ size = 28, className = '' }) => {
   
   return (
     <div className={`relative inline-block ${className}`}>
-      <UserPlus size={size} className="text-indigo-600" />
-      <div className="absolute -top-1.5 -right-1.5 bg-white rounded-full p-1 shadow-md">
+      <div className="bg-gradient-to-br from-indigo-500 to-blue-600 rounded-full p-1">
+        <UserPlus size={size} className="text-white" />
+      </div>
+      <div className="absolute -top-1.5 -right-1.5 bg-white rounded-full p-1 shadow-md border border-indigo-100">
         <Music size={musicSize} className="text-indigo-600" />
       </div>
     </div>
