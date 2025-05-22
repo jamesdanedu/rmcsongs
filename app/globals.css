@@ -24,3 +24,90 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Modern phone input styles for better mobile experience */
+.phone-input-modern .PhoneInput {
+  --PhoneInputCountryFlag-height: 1.4em;
+  --PhoneInputCountryFlag-borderColor: rgba(199, 210, 254, 0.3);
+  --PhoneInputCountrySelectArrow-color: #6366f1;
+  --PhoneInputCountrySelectArrow-opacity: 0.7;
+}
+
+.phone-input-modern .PhoneInputInput {
+  border: 2px solid #e0e7ff !important;
+  border-radius: 12px !important;
+  border-left: 2px solid #e0e7ff !important;
+  padding: 16px 16px 16px 60px !important;
+  font-size: 18px !important;
+  line-height: 1.5 !important;
+  outline: none !important;
+  transition: all 0.2s ease !important;
+  width: 100% !important;
+  background-color: #f8fafc !important;
+  min-height: 56px !important;
+}
+
+.phone-input-modern .PhoneInputInput:focus {
+  border-color: #6366f1 !important;
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.2) !important;
+  background-color: white !important;
+}
+
+.phone-input-modern .PhoneInputCountrySelect {
+  border: 2px solid #e0e7ff !important;
+  border-radius: 12px 0 0 12px !important;
+  border-right: none !important;
+  background: #f8fafc !important;
+  padding: 12px 8px !important;
+  transition: all 0.2s ease !important;
+  min-height: 56px !important;
+  display: flex !important;
+  align-items: center !important;
+}
+
+.phone-input-modern .PhoneInputCountrySelect:focus {
+  border-color: #6366f1 !important;
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.2) !important;
+  background-color: white !important;
+  outline: none !important;
+}
+
+.phone-input-modern .PhoneInputCountrySelectArrow {
+  color: #6366f1 !important;
+  opacity: 0.7 !important;
+}
+
+.phone-input-modern .PhoneInputCountryIcon {
+  border-radius: 3px !important;
+  box-shadow: 0 0 0 1px rgba(199, 210, 254, 0.3) !important;
+}
+
+/* Error state for phone input */
+.phone-input-error .PhoneInputInput {
+  border-color: #f87171 !important;
+  background-color: #fef2f2 !important;
+}
+
+.phone-input-error .PhoneInputCountrySelect {
+  border-color: #f87171 !important;
+  background-color: #fef2f2 !important;
+}
+
+/* Mobile optimizations */
+@media (max-width: 640px) {
+  .phone-input-modern .PhoneInputInput {
+    font-size: 16px !important; /* Prevents zoom on iOS */
+    padding: 14px 14px 14px 55px !important;
+    min-height: 52px !important;
+  }
+  
+  .phone-input-modern .PhoneInputCountrySelect {
+    padding: 10px 6px !important;
+    min-height: 52px !important;
+  }
+}
+
+/* Button animations */
+.active\:scale-98:active {
+  transform: scale(0.98);
+}
