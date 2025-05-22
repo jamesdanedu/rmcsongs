@@ -1,8 +1,7 @@
-
 'use client';
 
-import ChoirSongApp from '../components/ChoirSongApp';
+import ChoirSongAppStyled from '../components/ChoirSongAppStyled';
 
 export default function Home() {
-  return <ChoirSongApp />;
+  return <ChoirSongAppStyled />;
 }
