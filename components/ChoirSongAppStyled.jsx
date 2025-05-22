@@ -1,7 +1,11 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { X, Mic, PlusCircle, Heart, BarChart3, Music, ListMusic, UserPlus, Star, Search, Play, User, Phone } from 'lucide-react';
+import { X, Mic, PlusCircle, Heart, BarChart3, Music, ListMusic, UserPlus, Star, Search, Play } from 'lucide-react';
+import { useAuth } from '../hooks/useAuth';
+import { useSongs } from '../hooks/useSongs';
+import { useVotes } from '../hooks/useVotes';
+import UserLoginForm from './UserLoginForm';
 
 // CSS-in-JS styles to ensure they work regardless of Tailwind issues
 const styles = {
@@ -16,27 +20,6 @@ const styles = {
     maxWidth: '448px', // md equivalent
     margin: '0 auto',
     padding: '0 16px'
-  },
-
-  // Login screen styles
-  loginContainer: {
-    minHeight: '100vh',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: '16px',
-    background: 'linear-gradient(to bottom, #eef2ff, #ffffff, #eef2ff)'
-  },
-
-  loginCard: {
-    background: 'white',
-    padding: '32px', // Increased padding
-    borderRadius: '12px',
-    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
-    border: '1px solid #e0e7ff',
-    width: '100%',
-    maxWidth: '384px'
   },
 
   // Header styles
@@ -73,10 +56,10 @@ const styles = {
     marginBottom: '16px'
   },
 
-  // Input styles - FIXED padding
+  // Input styles
   input: {
     width: '100%',
-    padding: '12px 16px', // Better padding
+    padding: '12px 16px',
     border: '1px solid #c7d2fe',
     borderRadius: '8px',
     fontSize: '16px',
@@ -159,7 +142,7 @@ const styles = {
     gap: '4px'
   },
 
-  // Tab navigation styles - FIXED positioning and visibility
+  // Tab navigation styles
   tabNavigation: {
     position: 'fixed',
     bottom: 0,
@@ -241,18 +224,29 @@ const styles = {
     fontSize: '14px',
     fontWeight: '500',
     color: '#374151',
-    marginBottom: '8px', // Increased margin
+    marginBottom: '8px',
     display: 'flex',
     alignItems: 'center'
   },
 
-  // Error message styles
-  errorMessage: {
-    color: '#dc2626',
-    fontSize: '14px',
-    marginTop: '4px',
+  // Loading styles
+  loading: {
     display: 'flex',
-    alignItems: 'center'
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '20px',
+    color: '#6b7280'
+  },
+
+  // Error styles
+  error: {
+    color: '#dc2626',
+    background: '#fef2f2',
+    border: '1px solid #fecaca',
+    borderRadius: '8px',
+    padding: '12px',
+    margin: '16px 0',
+    fontSize: '14px'
   },
 
   // Song card styles
@@ -337,7 +331,6 @@ const searchYouTube = async (query) => {
   
   if (!API_KEY) {
     console.warn('YouTube API key not found. Using mock data.');
-    // Fallback to mock data if no API key
     return [
       {
         id: `mock-${Date.now()}-1`,
@@ -406,17 +399,13 @@ const ChoirIcon = ({ size = 28 }) => {
 };
 
 const ChoirSongAppStyled = () => {
-  // Authentication state
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [formData, setFormData] = useState({
-    fullName: '',
-    phoneNumber: ''
-  });
-  const [authErrors, setAuthErrors] = useState({});
+  // Use database hooks instead of local state
+  const { user, isLoggedIn, logout, isLoading: authLoading, error: authError } = useAuth();
+  const { songs, isLoading: songsLoading, error: songsError, addNewSong, getSortedSongs } = useSongs(user);
+  const { voteForSong, isVoting, error: voteError } = useVotes(user);
   
   // App state
   const [activeTab, setActiveTab] = useState('suggest');
-  const [songs, setSongs] = useState([]);
   const [newSong, setNewSong] = useState({
     title: '',
     artist: '',
@@ -438,111 +427,44 @@ const ChoirSongAppStyled = () => {
     }
   }, [newSong.title, newSong.artist]);
 
-  // Load data from localStorage on mount
+  // Load active tab from localStorage
   useEffect(() => {
-    const storedUser = localStorage.getItem('rmc_username');
-    if (storedUser) {
-      setFormData({ fullName: storedUser, phoneNumber: '' });
-      setIsLoggedIn(true);
-    }
-    
-    const storedSongs = localStorage.getItem('rmc_songs');
-    if (storedSongs) {
-      try {
-        setSongs(JSON.parse(storedSongs));
-      } catch (e) {
-        console.error('Failed to parse stored songs:', e);
-      }
-    }
-    
     const storedTab = localStorage.getItem('rmc_active_tab');
     if (storedTab) {
       setActiveTab(storedTab);
     }
   }, []);
   
-  // Save data to localStorage when it changes
-  useEffect(() => {
-    if (songs.length > 0) {
-      localStorage.setItem('rmc_songs', JSON.stringify(songs));
-    }
-  }, [songs]);
-  
+  // Save active tab to localStorage
   useEffect(() => {
     if (activeTab) {
       localStorage.setItem('rmc_active_tab', activeTab);
     }
   }, [activeTab]);
-
-  // Form validation
-  const validateForm = () => {
-    const newErrors = {};
-    
-    if (!formData.fullName.trim()) {
-      newErrors.fullName = 'Full name is required';
-    }
-    
-    if (!formData.phoneNumber.trim()) {
-      newErrors.phoneNumber = 'Phone number is required';
-    } else if (!/^\+?[0-9]{10,15}$/.test(formData.phoneNumber.replace(/\s+/g, ''))) {
-      newErrors.phoneNumber = 'Please enter a valid phone number';
-    }
-    
-    setAuthErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData({
-      ...formData,
-      [name]: value
-    });
-  };
   
-  // Authentication handlers
-  const handleLogin = (e) => {
-    e.preventDefault();
-    if (validateForm()) {
-      localStorage.setItem('rmc_username', formData.fullName);
-      setIsLoggedIn(true);
-    }
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem('rmc_username');
-    setIsLoggedIn(false);
-    setFormData({ fullName: '', phoneNumber: '' });
-  };
-  
-  // Song handlers
-  const handleAddSong = () => {
+  // Song handlers - now using database
+  const handleAddSong = async () => {
     if (newSong.title && newSong.artist) {
-      const songToAdd = {
-        id: Date.now(),
+      const songData = {
         title: newSong.title,
         artist: newSong.artist,
         notes: newSong.notes,
         youtubeVideoId: newSong.youtubeVideoId,
-        youtubeTitle: newSong.youtubeTitle,
-        suggestedBy: formData.fullName,
-        votes: 0,
-        voters: []
+        youtubeTitle: newSong.youtubeTitle
       };
-      setSongs([...songs, songToAdd]);
-      setNewSong({ title: '', artist: '', notes: '', youtubeVideoId: '', youtubeTitle: '' });
-      setSelectedVideo(null);
-      setYoutubeResults([]);
-      setYoutubeQuery('');
+      
+      const success = await addNewSong(songData);
+      if (success) {
+        setNewSong({ title: '', artist: '', notes: '', youtubeVideoId: '', youtubeTitle: '' });
+        setSelectedVideo(null);
+        setYoutubeResults([]);
+        setYoutubeQuery('');
+      }
     }
   };
 
-  const handleVote = (songId) => {
-    setSongs(songs.map(song => 
-      song.id === songId 
-        ? { ...song, votes: song.votes + 1, voters: [...song.voters, formData.fullName] }
-        : song
-    ));
+  const handleVote = async (songId) => {
+    await voteForSong(songId);
   };
 
   // YouTube search handlers
@@ -568,100 +490,36 @@ const ChoirSongAppStyled = () => {
     });
   };
 
-  // Login screen - FIXED with phone number
+  // Show loading screen during auth check
+  if (authLoading) {
+    return (
+      <div style={styles.pageContainer}>
+        <div style={styles.loading}>
+          <div style={{ textAlign: 'center' }}>
+            <ChoirIcon size={56} />
+            <p style={{ marginTop: '16px' }}>Loading...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show login screen if not logged in
   if (!isLoggedIn) {
     return (
-      <div style={styles.loginContainer}>
-        <div style={styles.loginCard}>
-          <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-            <div style={{ marginBottom: '12px' }}>
-              <ChoirIcon size={56} />
-            </div>
+      <div style={styles.pageContainer}>
+        <div style={styles.maxWidthContainer}>
+          <div style={{ textAlign: 'center', marginBottom: '24px', paddingTop: '60px' }}>
+            <ChoirIcon size={56} />
             <h1 style={styles.title}>RMC Song Wishlist</h1>
             <p style={styles.subtitle}>Share, vote, and discover new songs</p>
           </div>
-          
-          <form onSubmit={handleLogin}>
-            <div style={{ marginBottom: '16px' }}>
-              <label style={styles.label}>
-                <User size={16} style={{ marginRight: '4px', color: '#6366f1' }} />
-                Full Name
-              </label>
-              <input
-                type="text"
-                name="fullName"
-                style={{
-                  ...styles.input,
-                  borderColor: authErrors.fullName ? '#dc2626' : '#c7d2fe'
-                }}
-                value={formData.fullName}
-                onChange={handleChange}
-                placeholder="Enter your full name"
-                autoComplete="name"
-                autoCapitalize="words"
-                onFocus={(e) => e.target.style.borderColor = '#4f46e5'}
-                onBlur={(e) => e.target.style.borderColor = authErrors.fullName ? '#dc2626' : '#c7d2fe'}
-              />
-              {authErrors.fullName && (
-                <p style={styles.errorMessage}>
-                  <X size={16} style={{ marginRight: '4px' }} />
-                  {authErrors.fullName}
-                </p>
-              )}
+          <UserLoginForm />
+          {authError && (
+            <div style={styles.error}>
+              {authError}
             </div>
-
-            <div style={{ marginBottom: '24px' }}>
-              <label style={styles.label}>
-                <Phone size={16} style={{ marginRight: '4px', color: '#6366f1' }} />
-                Phone Number
-              </label>
-              <input
-                type="tel"
-                name="phoneNumber"
-                style={{
-                  ...styles.input,
-                  borderColor: authErrors.phoneNumber ? '#dc2626' : '#c7d2fe'
-                }}
-                value={formData.phoneNumber}
-                onChange={handleChange}
-                placeholder="Enter your phone number"
-                autoComplete="tel"
-                onFocus={(e) => e.target.style.borderColor = '#4f46e5'}
-                onBlur={(e) => e.target.style.borderColor = authErrors.phoneNumber ? '#dc2626' : '#c7d2fe'}
-              />
-              <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
-                Format: +1234567890 or 1234567890
-              </p>
-              {authErrors.phoneNumber && (
-                <p style={styles.errorMessage}>
-                  <X size={16} style={{ marginRight: '4px' }} />
-                  {authErrors.phoneNumber}
-                </p>
-              )}
-            </div>
-            
-            <button
-              type="submit"
-              style={styles.primaryButton}
-              onMouseOver={(e) => {
-                e.target.style.background = 'linear-gradient(to right, #4338ca, #1d4ed8)';
-              }}
-              onMouseOut={(e) => {
-                e.target.style.background = 'linear-gradient(to right, #4f46e5, #2563eb)';
-              }}
-            >
-              Sign In
-            </button>
-
-            <p style={{ 
-              marginTop: '16px', 
-              fontSize: '12px', 
-              textAlign: 'center', 
-              color: '#6b7280' 
-            }}>
-              Your phone number is stored in encrypted format so it is not readable by humans.
-            </p>
-          </form>
+          )}
         </div>
       </div>
     );
@@ -685,7 +543,7 @@ const ChoirSongAppStyled = () => {
               </h1>
             </div>
             <button 
-              onClick={handleLogout}
+              onClick={logout}
               style={{
                 color: '#4f46e5',
                 background: 'none',
@@ -715,9 +573,13 @@ const ChoirSongAppStyled = () => {
             margin: '4px 0 0 0'
           }}>
             <Mic size={14} style={{ marginRight: '4px' }} />
-            Logged in as: {formData.fullName}
+            Logged in as: {user?.name || user?.fullName}
           </p>
         </header>
+
+        {/* Error Messages */}
+        {songsError && <div style={styles.error}>{songsError}</div>}
+        {voteError && <div style={styles.error}>{voteError}</div>}
 
         {/* Tab Content */}
         {activeTab === 'suggest' && (
@@ -739,21 +601,24 @@ const ChoirSongAppStyled = () => {
         {activeTab === 'vote' && (
           <VoteTab
             songs={songs} 
-            username={formData.fullName}
+            user={user}
             handleVote={handleVote}
+            isVoting={isVoting}
+            isLoading={songsLoading}
             styles={styles}
           />
         )}
         
         {activeTab === 'rank' && (
           <RankingsTab 
-            songs={songs}
+            songs={getSortedSongs()}
+            isLoading={songsLoading}
             styles={styles}
           />
         )}
       </div>
 
-      {/* Tab Navigation - FIXED to always be visible */}
+      {/* Tab Navigation */}
       <div style={styles.tabNavigation}>
         <div style={styles.tabContainer}>
           <button
@@ -815,7 +680,7 @@ const ChoirSongAppStyled = () => {
   );
 };
 
-// SuggestTab Component with YouTube Integration
+// SuggestTab Component
 const SuggestTab = ({ 
   newSong, 
   setNewSong, 
@@ -1010,7 +875,15 @@ const SuggestTab = ({
 };
 
 // VoteTab Component
-const VoteTab = ({ songs, username, handleVote, styles }) => {
+const VoteTab = ({ songs, user, handleVote, isVoting, isLoading, styles }) => {
+  if (isLoading) {
+    return (
+      <div style={styles.card}>
+        <div style={styles.loading}>Loading songs...</div>
+      </div>
+    );
+  }
+
   return (
     <div style={styles.card}>
       <h2 style={styles.sectionTitle}>
@@ -1031,8 +904,7 @@ const VoteTab = ({ songs, username, handleVote, styles }) => {
       ) : (
         <div>
           {songs.map(song => {
-            const hasVoters = Array.isArray(song.voters);
-            const hasVoted = hasVoters && song.voters.includes(username);
+            const hasVoted = song.votedByCurrentUser;
             
             return (
               <div 
@@ -1110,20 +982,20 @@ const VoteTab = ({ songs, username, handleVote, styles }) => {
                     <button 
                       style={hasVoted ? styles.votedButton : styles.voteButton}
                       onClick={() => handleVote(song.id)}
-                      disabled={hasVoted}
+                      disabled={hasVoted || isVoting}
                       onMouseOver={(e) => {
-                        if (!hasVoted) {
+                        if (!hasVoted && !isVoting) {
                           e.target.style.background = 'linear-gradient(to right, #db2777, #e11d48)';
                         }
                       }}
                       onMouseOut={(e) => {
-                        if (!hasVoted) {
+                        if (!hasVoted && !isVoting) {
                           e.target.style.background = 'linear-gradient(to right, #ec4899, #f43f5e)';
                         }
                       }}
                     >
                       <Heart size={14} />
-                      {hasVoted ? 'Voted' : 'Vote'}
+                      {isVoting ? 'Voting...' : hasVoted ? 'Voted' : 'Vote'}
                     </button>
                   </div>
                 </div>
@@ -1137,11 +1009,14 @@ const VoteTab = ({ songs, username, handleVote, styles }) => {
 };
 
 // RankingsTab Component
-const RankingsTab = ({ songs, styles }) => {
-  const sortedSongs = React.useMemo(() => {
-    if (!Array.isArray(songs) || songs.length === 0) return [];
-    return [...songs].sort((a, b) => (b.votes || 0) - (a.votes || 0));
-  }, [songs]);
+const RankingsTab = ({ songs, isLoading, styles }) => {
+  if (isLoading) {
+    return (
+      <div style={styles.card}>
+        <div style={styles.loading}>Loading rankings...</div>
+      </div>
+    );
+  }
 
   const maxVotes = React.useMemo(() => {
     if (!Array.isArray(songs) || songs.length === 0) return 1;
@@ -1175,7 +1050,7 @@ const RankingsTab = ({ songs, styles }) => {
             borderRadius: '8px', 
             border: '1px solid #e0e7ff' 
           }}>
-            {sortedSongs.map((song, index) => (
+            {songs.map((song, index) => (
               <div key={song.id || index} style={{ marginBottom: '12px' }}>
                 <div style={{ display: 'flex', alignItems: 'center' }}>
                   <div style={{
@@ -1250,7 +1125,7 @@ const RankingsTab = ({ songs, styles }) => {
               Detailed List
             </h3>
             <div style={{ maxHeight: '384px', overflowY: 'auto', paddingRight: '4px' }}>
-              {sortedSongs.map((song, index) => (
+              {songs.map((song, index) => (
                 <div 
                   key={song.id || index} 
                   style={{
