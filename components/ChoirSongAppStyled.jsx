@@ -369,6 +369,13 @@ const searchYouTube = async (query) => {
   }
 };
 
+// Helper function to get difficulty color
+const getDifficultyColor = (difficulty) => {
+  if (difficulty <= 3) return '#10b981'; // Green (Easy)
+  if (difficulty <= 6) return '#f59e0b'; // Yellow (Medium) 
+  return '#ef4444'; // Red (Hard)
+};
+
 // ChoirIcon Component
 const ChoirIcon = ({ size = 28 }) => {
   const musicSize = Math.max(Math.floor(size * 0.4), 12);
@@ -403,6 +410,17 @@ const ChoirSongAppStyled = () => {
   const { user, isLoggedIn, logout, isLoading: authLoading, error: authError } = useAuth();
   const { songs, isLoading: songsLoading, error: songsError, addNewSong, getSortedSongs } = useSongs(user);
   const { voteForSong, isVoting, error: voteError } = useVotes(user);
+  
+  // Debug logging
+  console.log('ChoirSongApp render - isLoggedIn:', isLoggedIn, 'user:', user, 'authLoading:', authLoading);
+
+  // Add useEffect to track isLoggedIn changes
+  useEffect(() => {
+    console.log('isLoggedIn changed to:', isLoggedIn, 'user:', user);
+    if (isLoggedIn && user) {
+      console.log('Should now show main app!');
+    }
+  }, [isLoggedIn, user]);
   
   // App state
   const [activeTab, setActiveTab] = useState('suggest');
@@ -492,6 +510,7 @@ const ChoirSongAppStyled = () => {
 
   // Show loading screen during auth check
   if (authLoading) {
+    console.log('Showing loading screen - authLoading:', authLoading);
     return (
       <div style={styles.pageContainer}>
         <div style={styles.loading}>
@@ -506,6 +525,7 @@ const ChoirSongAppStyled = () => {
 
   // Show login screen if not logged in
   if (!isLoggedIn) {
+    console.log('Showing login screen - isLoggedIn:', isLoggedIn, 'user:', user);
     return (
       <div style={styles.pageContainer}>
         <div style={styles.maxWidthContainer}>
@@ -526,6 +546,7 @@ const ChoirSongAppStyled = () => {
   }
   
   // Main app content when logged in
+  console.log('Showing main app - isLoggedIn:', isLoggedIn, 'user:', user);
   return (
     <div style={styles.pageContainer}>
       <div style={styles.maxWidthContainer}>
@@ -574,6 +595,24 @@ const ChoirSongAppStyled = () => {
           }}>
             <Mic size={14} style={{ marginRight: '4px' }} />
             Logged in as: {user?.name || user?.fullName}
+            {user?.phone_number && (
+              <span style={{ fontSize: '12px', color: '#818cf8', marginLeft: '8px' }}>
+                • {user.phone_number}
+              </span>
+            )}
+            {user?.is_musician && (
+              <span style={{ 
+                fontSize: '12px', 
+                color: '#10b981', 
+                marginLeft: '8px',
+                background: '#dcfce7',
+                padding: '2px 6px',
+                borderRadius: '10px',
+                fontWeight: '500'
+              }}>
+                ♪ Musician
+              </span>
+            )}
           </p>
         </header>
 
@@ -876,6 +915,26 @@ const SuggestTab = ({
 
 // VoteTab Component
 const VoteTab = ({ songs, user, handleVote, isVoting, isLoading, styles }) => {
+  const [difficultyRatings, setDifficultyRatings] = useState({});
+  const [submittingRating, setSubmittingRating] = useState(false);
+
+  const handleDifficultyRating = async (songId, rating) => {
+    if (!user?.is_musician) return;
+    
+    setSubmittingRating(true);
+    try {
+      // Add difficulty rating function call here (will implement in useVotes hook)
+      console.log(`Setting difficulty rating for song ${songId}: ${rating}`);
+      setDifficultyRatings(prev => ({
+        ...prev,
+        [songId]: rating
+      }));
+    } catch (error) {
+      console.error('Error submitting difficulty rating:', error);
+    }
+    setSubmittingRating(false);
+  };
+
   if (isLoading) {
     return (
       <div style={styles.card}>
@@ -951,16 +1010,6 @@ const VoteTab = ({ songs, user, handleVote, isVoting, isLoading, styles }) => {
                         {song.notes}
                       </p>
                     )}
-                    <p style={{ 
-                      fontSize: '12px', 
-                      color: '#818cf8', 
-                      marginTop: '8px',
-                      display: 'flex',
-                      alignItems: 'center'
-                    }}>
-                      <Mic size={12} style={{ marginRight: '4px' }} />
-                      Suggested by: {song.suggestedBy || 'Unknown'}
-                    </p>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginLeft: '16px' }}>
                     <div style={{
@@ -997,6 +1046,50 @@ const VoteTab = ({ songs, user, handleVote, isVoting, isLoading, styles }) => {
                       <Heart size={14} />
                       {isVoting ? 'Voting...' : hasVoted ? 'Voted' : 'Vote'}
                     </button>
+                    
+                    {/* Difficulty Rating Slider for Musicians Only */}
+                    {user?.is_musician && (
+                      <div style={{ marginTop: '8px', width: '100%' }}>
+                        <label style={{ 
+                          fontSize: '11px', 
+                          color: '#6366f1', 
+                          fontWeight: '500',
+                          display: 'block',
+                          marginBottom: '4px'
+                        }}>
+                          Difficulty (1-10):
+                        </label>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{ fontSize: '10px', color: '#818cf8' }}>1</span>
+                          <input
+                            type="range"
+                            min="1"
+                            max="10"
+                            value={difficultyRatings[song.id] || 5}
+                            onChange={(e) => handleDifficultyRating(song.id, parseInt(e.target.value))}
+                            disabled={submittingRating}
+                            style={{
+                              flex: 1,
+                              height: '4px',
+                              background: 'linear-gradient(to right, #10b981, #f59e0b, #ef4444)',
+                              borderRadius: '2px',
+                              outline: 'none',
+                              appearance: 'none'
+                            }}
+                          />
+                          <span style={{ fontSize: '10px', color: '#818cf8' }}>10</span>
+                        </div>
+                        <div style={{ 
+                          fontSize: '10px', 
+                          color: '#4f46e5', 
+                          textAlign: 'center', 
+                          marginTop: '2px',
+                          fontWeight: '500'
+                        }}>
+                          {difficultyRatings[song.id] || 5}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1042,6 +1135,37 @@ const RankingsTab = ({ songs, isLoading, styles }) => {
         </div>
       ) : (
         <div>
+          {/* Legend for difficulty colors */}
+          <div style={{ 
+            padding: '12px', 
+            marginBottom: '16px', 
+            background: 'linear-gradient(to right, #eef2ff, #dbeafe)', 
+            borderRadius: '8px', 
+            border: '1px solid #e0e7ff',
+            fontSize: '12px',
+            color: '#4338ca'
+          }}>
+            <strong>Legend:</strong>
+            <div style={{ display: 'flex', gap: '16px', marginTop: '4px', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <Star size={12} style={{ color: '#fbbf24' }} />
+                <span>Popularity votes</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: '#10b981' }}></div>
+                <span>Easy (1-3)</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: '#f59e0b' }}></div>
+                <span>Medium (4-6)</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: '#ef4444' }}></div>
+                <span>Hard (7-10)</span>
+              </div>
+            </div>
+          </div>
+          
           {/* Bar chart visualization */}
           <div style={{ 
             padding: '16px', 
@@ -1074,7 +1198,7 @@ const RankingsTab = ({ songs, isLoading, styles }) => {
                     <div 
                       style={{
                         ...styles.rankingBar,
-                        width: `${Math.max(((song.votes || 0) / maxVotes) * 100, 10)}%`,
+                        width: `${Math.min(((song.votes || 0) / maxVotes) * 70 + 20, 85)}%`,
                         justifyContent: 'space-between'
                       }}
                       onMouseOver={(e) => e.target.style.transform = 'translateX(4px)'}
@@ -1083,21 +1207,41 @@ const RankingsTab = ({ songs, isLoading, styles }) => {
                       <span style={{ fontSize: '14px', fontWeight: '500', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
                         {song.title || 'Untitled'}
                       </span>
-                      <div style={{
-                        background: 'white',
-                        color: '#4338ca',
-                        borderRadius: '50%',
-                        width: '24px',
-                        height: '24px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: '12px',
-                        fontWeight: 'bold',
-                        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-                        border: '1px solid #c7d2fe'
-                      }}>
-                        {song.votes || 0}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        {/* Difficulty indicator */}
+                        {song.avgDifficulty && (
+                          <div style={{
+                            background: getDifficultyColor(song.avgDifficulty),
+                            color: 'white',
+                            borderRadius: '50%',
+                            width: '16px',
+                            height: '16px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '9px',
+                            fontWeight: 'bold'
+                          }}>
+                            {Math.round(song.avgDifficulty)}
+                          </div>
+                        )}
+                        {/* Vote count */}
+                        <div style={{
+                          background: 'white',
+                          color: '#4338ca',
+                          borderRadius: '50%',
+                          width: '24px',
+                          height: '24px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '12px',
+                          fontWeight: 'bold',
+                          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+                          border: '1px solid #c7d2fe'
+                        }}>
+                          {song.votes || 0}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1204,11 +1348,32 @@ const RankingsTab = ({ songs, isLoading, styles }) => {
                       fontSize: '14px',
                       fontWeight: '600',
                       display: 'flex',
+                      flexDirection: 'column',
                       alignItems: 'center',
-                      boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
+                      boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+                      minWidth: '100px'
                     }}>
-                      <Star size={14} style={{ marginRight: '4px', color: '#fbbf24' }} />
-                      {song.votes || 0} {(song.votes || 0) === 1 ? 'vote' : 'votes'}
+                      <div style={{ display: 'flex', alignItems: 'center', marginBottom: '2px' }}>
+                        <Star size={14} style={{ marginRight: '4px', color: '#fbbf24' }} />
+                        {song.votes || 0} {(song.votes || 0) === 1 ? 'vote' : 'votes'}
+                      </div>
+                      
+                      {/* Difficulty Rating Display */}
+                      {song.avgDifficulty && (
+                        <div style={{ 
+                          fontSize: '11px', 
+                          color: getDifficultyColor(song.avgDifficulty),
+                          fontWeight: '500',
+                          display: 'flex',
+                          alignItems: 'center'
+                        }}>
+                          <Music size={10} style={{ marginRight: '2px' }} />
+                          Difficulty: {song.avgDifficulty}/10
+                          <span style={{ fontSize: '9px', color: '#818cf8', marginLeft: '4px' }}>
+                            ({song.difficultyCount} musician{song.difficultyCount !== 1 ? 's' : ''})
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
                   

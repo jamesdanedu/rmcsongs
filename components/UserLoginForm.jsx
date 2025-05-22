@@ -1,13 +1,16 @@
 // components/UserLoginForm.jsx
 import React, { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
-import { X, Check, User, Phone, ArrowRight } from 'lucide-react';
+import { X, Check, User, Phone, ArrowRight, Music } from 'lucide-react';
+import PhoneInput from 'react-phone-number-input';
+import 'react-phone-number-input/style.css';
 
 const UserLoginForm = () => {
   const { login, error: authError, isLoading } = useAuth();
   const [formData, setFormData] = useState({
     fullName: '',
-    phoneNumber: ''
+    phoneNumber: '',
+    isMusician: false
   });
   const [errors, setErrors] = useState({});
 
@@ -18,9 +21,9 @@ const UserLoginForm = () => {
       newErrors.fullName = 'Full name is required';
     }
     
-    if (!formData.phoneNumber.trim()) {
+    if (!formData.phoneNumber) {
       newErrors.phoneNumber = 'Phone number is required';
-    } else if (!/^\+?[0-9]{10,15}$/.test(formData.phoneNumber.replace(/\s+/g, ''))) {
+    } else if (formData.phoneNumber.length < 10) {
       newErrors.phoneNumber = 'Please enter a valid phone number';
     }
     
@@ -28,25 +31,29 @@ const UserLoginForm = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
+  const handleChange = (field, value) => {
     setFormData({
       ...formData,
-      [name]: value
+      [field]: value
     });
+    
+    // Clear error when user starts typing
+    if (errors[field]) {
+      setErrors({
+        ...errors,
+        [field]: ''
+      });
+    }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     
     if (validateForm()) {
-      const success = await login({
-        fullName: formData.fullName,
-        phoneNumber: formData.phoneNumber
-      });
+      // Pass phone number as first parameter, name as second, and musician flag as third
+      const success = await login(formData.phoneNumber, formData.fullName, formData.isMusician);
       
       if (success) {
-        // Login successful, redirect or show success message
         console.log('Logged in successfully');
       }
     }
@@ -71,7 +78,7 @@ const UserLoginForm = () => {
             name="fullName"
             className={`w-full p-3 border ${errors.fullName ? 'border-red-500' : 'border-indigo-200'} rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:outline-none transition-all duration-200`}
             value={formData.fullName}
-            onChange={handleChange}
+            onChange={(e) => handleChange('fullName', e.target.value)}
             placeholder="Enter your full name"
             autoComplete="name"
             autoCapitalize="words"
@@ -82,21 +89,49 @@ const UserLoginForm = () => {
         </div>
         
         <div className="mb-6">
+          <label className="flex items-center cursor-pointer">
+            <input
+              type="checkbox"
+              checked={formData.isMusician}
+              onChange={(e) => handleChange('isMusician', e.target.checked)}
+              className="sr-only"
+            />
+            <div className={`relative w-5 h-5 rounded border-2 transition-all duration-200 ${
+              formData.isMusician 
+                ? 'bg-indigo-600 border-indigo-600' 
+                : 'border-indigo-200'
+            }`}>
+              {formData.isMusician && (
+                <Check size={12} className="absolute top-0.5 left-0.5 text-white" />
+              )}
+            </div>
+            <span className="ml-2 text-sm text-gray-700 flex items-center">
+              <Music size={16} className="mr-1 text-indigo-500" />
+              I am a musician in the group
+            </span>
+          </label>
+          <p className="mt-1 text-xs text-gray-500">Musicians can provide difficulty ratings for songs</p>
+        </div>
+        
+        <div className="mb-6">
           <label htmlFor="phoneNumber" className="block text-sm font-medium text-gray-700 mb-1 flex items-center">
             <Phone size={16} className="mr-1 text-indigo-500" />
             Phone Number
           </label>
-          <input
-            type="tel"
-            id="phoneNumber"
-            name="phoneNumber"
-            className={`w-full p-3 border ${errors.phoneNumber ? 'border-red-500' : 'border-indigo-200'} rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:outline-none transition-all duration-200`}
-            value={formData.phoneNumber}
-            onChange={handleChange}
-            placeholder="Enter your phone number"
-            autoComplete="tel"
-          />
-          <p className="mt-1 text-xs text-gray-500">Format: +1234567890 or 1234567890</p>
+          <div className={`w-full ${errors.phoneNumber ? 'phone-input-error' : ''}`}>
+            <PhoneInput
+              value={formData.phoneNumber}
+              onChange={(value) => handleChange('phoneNumber', value)}
+              defaultCountry="IE"
+              placeholder="Enter phone number"
+              className="w-full"
+              style={{
+                '--PhoneInputCountryFlag-height': '1.2em',
+                '--PhoneInputCountrySelectArrow-opacity': 0.6
+              }}
+            />
+          </div>
+          <p className="mt-1 text-xs text-gray-500">International format recommended</p>
           {errors.phoneNumber && (
             <p className="mt-1 text-sm text-red-600">{errors.phoneNumber}</p>
           )}
@@ -128,10 +163,12 @@ const UserLoginForm = () => {
           )}
         </button>
         
-        <p className="mt-4 text-xs text-center text-gray-500">
-          Your phone number is stored in encrypted format so it not
-          readable by humans.
-        </p>
+        <div className="mt-4 p-3 bg-indigo-50 rounded-lg border border-indigo-100">
+          <p className="text-xs text-center text-indigo-600">
+            <strong>Existing users:</strong> You can use any phone number for now.
+            Your data is linked by name.
+          </p>
+        </div>
       </form>
     </div>
   );
