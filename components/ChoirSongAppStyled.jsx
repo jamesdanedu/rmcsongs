@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { X, Mic, PlusCircle, Heart, BarChart3, Music, ListMusic, UserPlus, Star, Search, Play } from 'lucide-react';
+import { X, Mic, PlusCircle, Heart, BarChart3, Music, ListMusic, UserPlus, Star, Search, Play, AlertCircle, RefreshCw } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useSongs } from '../hooks/useSongs';
 import { useVotes } from '../hooks/useVotes';
@@ -246,7 +246,10 @@ const styles = {
     borderRadius: '8px',
     padding: '12px',
     margin: '16px 0',
-    fontSize: '14px'
+    fontSize: '14px',
+    display: 'flex',
+    alignItems: 'flex-start',
+    gap: '8px'
   },
 
   // Song card styles
@@ -322,6 +325,22 @@ const styles = {
     borderRadius: '8px',
     background: '#eef2ff',
     marginBottom: '8px'
+  },
+
+  // Retry button style
+  retryButton: {
+    padding: '8px 16px',
+    borderRadius: '6px',
+    background: 'linear-gradient(to right, #f59e0b, #d97706)',
+    color: 'white',
+    border: 'none',
+    fontSize: '14px',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+    transition: 'all 0.2s ease',
+    marginLeft: '8px'
   }
 };
 
@@ -405,22 +424,76 @@ const ChoirIcon = ({ size = 28 }) => {
   );
 };
 
+// Error Display Component
+const ErrorDisplay = ({ error, onRetry, onDismiss }) => {
+  if (!error) return null;
+  
+  return (
+    <div style={styles.error}>
+      <AlertCircle size={16} style={{ flexShrink: 0, marginTop: '2px' }} />
+      <div style={{ flex: 1 }}>
+        <p style={{ margin: 0 }}>{error}</p>
+      </div>
+      <div style={{ display: 'flex', gap: '8px' }}>
+        {onRetry && (
+          <button
+            onClick={onRetry}
+            style={styles.retryButton}
+            title="Retry"
+          >
+            <RefreshCw size={14} />
+            Retry
+          </button>
+        )}
+        {onDismiss && (
+          <button
+            onClick={onDismiss}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: '#dc2626',
+              cursor: 'pointer',
+              padding: '4px'
+            }}
+            title="Dismiss"
+          >
+            <X size={16} />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const ChoirSongAppStyled = () => {
-  // Use database hooks instead of local state
-  const { user, isLoggedIn, logout, isLoading: authLoading, error: authError } = useAuth();
-  const { songs, isLoading: songsLoading, error: songsError, addNewSong, getSortedSongs } = useSongs(user);
-  const { voteForSong, isVoting, error: voteError } = useVotes(user);
+  // Use database hooks with improved error handling
+  const { user, isLoggedIn, logout, isLoading: authLoading, error: authError, clearError: clearAuthError, forceUpdate } = useAuth();
+  const { songs, isLoading: songsLoading, error: songsError, addNewSong, getSortedSongs, loadSongs } = useSongs(user);
+  const { voteForSong, isVoting, isVotingForSong, error: voteError, clearError: clearVoteError } = useVotes(user);
+  
+  // Force re-render state (hack to fix login redirect issue)
+  const [localForceRender, setLocalForceRender] = useState(0);
   
   // Debug logging
-  console.log('ChoirSongApp render - isLoggedIn:', isLoggedIn, 'user:', user, 'authLoading:', authLoading);
+  console.log('ChoirSongApp render - isLoggedIn:', isLoggedIn, 'user:', user, 'authLoading:', authLoading, 'forceUpdate:', forceUpdate);
+  console.log('User has valid ID:', user?.id ? 'YES' : 'NO');
+  console.log('Should show main app:', isLoggedIn && user && !authLoading ? 'YES' : 'NO');
 
   // Add useEffect to track isLoggedIn changes
   useEffect(() => {
+    console.log('=== STATE CHANGE ===');
     console.log('isLoggedIn changed to:', isLoggedIn, 'user:', user);
+    console.log('authLoading:', authLoading, 'forceUpdate:', forceUpdate);
     if (isLoggedIn && user) {
-      console.log('Should now show main app!');
+      console.log('✅ Should now show main app!');
+      // Force a re-render after login to ensure UI updates
+      setLocalForceRender(prev => prev + 1);
+    } else {
+      console.log('❌ Still showing login screen');
+      console.log('Reasons: isLoggedIn =', isLoggedIn, 'user =', !!user, 'authLoading =', authLoading);
     }
-  }, [isLoggedIn, user]);
+    console.log('===================');
+  }, [isLoggedIn, user, authLoading, forceUpdate]);
   
   // App state
   const [activeTab, setActiveTab] = useState('suggest');
@@ -460,30 +533,39 @@ const ChoirSongAppStyled = () => {
     }
   }, [activeTab]);
   
-  // Song handlers - now using database
+  // Song handlers with improved error handling
   const handleAddSong = async () => {
-    if (newSong.title && newSong.artist) {
-      const songData = {
-        title: newSong.title,
-        artist: newSong.artist,
-        notes: newSong.notes,
-        youtubeVideoId: newSong.youtubeVideoId,
-        youtubeTitle: newSong.youtubeTitle
-      };
-      
-      const success = await addNewSong(songData);
-      if (success) {
-        setNewSong({ title: '', artist: '', notes: '', youtubeVideoId: '', youtubeTitle: '' });
-        setSelectedVideo(null);
-        setYoutubeResults([]);
-        setYoutubeQuery('');
-      }
+    if (!newSong.title?.trim() || !newSong.artist?.trim()) {
+      return;
+    }
+    
+    const songData = {
+      title: newSong.title.trim(),
+      artist: newSong.artist.trim(),
+      notes: newSong.notes?.trim() || '',
+      youtubeVideoId: newSong.youtubeVideoId || null,
+      youtubeTitle: newSong.youtubeTitle || null
+    };
+    
+    const success = await addNewSong(songData);
+    if (success) {
+      setNewSong({ title: '', artist: '', notes: '', youtubeVideoId: '', youtubeTitle: '' });
+      setSelectedVideo(null);
+      setYoutubeResults([]);
+      setYoutubeQuery('');
     }
   };
 
   const handleVote = async (songId, voteType = 'up') => {
+    if (!songId || isVotingForSong && isVotingForSong(songId)) {
+      return;
+    }
+    
     if (voteType === 'up') {
-      await voteForSong(songId);
+      const success = await voteForSong(songId);
+      if (success) {
+        console.log(`Vote successful for song ${songId}`);
+      }
     } else {
       // Handle downvote - you'll need to implement addDownvote in useVotes hook
       console.log('Downvote for song:', songId);
@@ -540,11 +622,10 @@ const ChoirSongAppStyled = () => {
             <p style={styles.subtitle}>Share, vote, and discover new songs</p>
           </div>
           <UserLoginForm />
-          {authError && (
-            <div style={styles.error}>
-              {authError}
-            </div>
-          )}
+          <ErrorDisplay 
+            error={authError} 
+            onDismiss={clearAuthError}
+          />
         </div>
       </div>
     );
@@ -553,7 +634,7 @@ const ChoirSongAppStyled = () => {
   // Main app content when logged in
   console.log('Showing main app - isLoggedIn:', isLoggedIn, 'user:', user);
   return (
-    <div style={styles.pageContainer}>
+    <div style={styles.pageContainer} data-main-app="true">
       <div style={styles.maxWidthContainer}>
         {/* Header */}
         <header style={styles.header}>
@@ -621,9 +702,16 @@ const ChoirSongAppStyled = () => {
           </p>
         </header>
 
-        {/* Error Messages */}
-        {songsError && <div style={styles.error}>{songsError}</div>}
-        {voteError && <div style={styles.error}>{voteError}</div>}
+        {/* Error Messages with improved display */}
+        <ErrorDisplay 
+          error={songsError} 
+          onRetry={loadSongs}
+          onDismiss={() => {/* Clear songs error */}}
+        />
+        <ErrorDisplay 
+          error={voteError} 
+          onDismiss={clearVoteError}
+        />
 
         {/* Tab Content */}
         {activeTab === 'suggest' && (
@@ -648,6 +736,7 @@ const ChoirSongAppStyled = () => {
             user={user}
             handleVote={handleVote}
             isVoting={isVoting}
+            isVotingForSong={isVotingForSong}
             isLoading={songsLoading}
             styles={styles}
           />
@@ -918,8 +1007,8 @@ const SuggestTab = ({
   );
 };
 
-// VoteTab Component - Tinder Style
-const VoteTab = ({ songs, user, handleVote, isVoting, isLoading, styles }) => {
+// VoteTab Component - Tinder Style with Touch Support
+const VoteTab = ({ songs, user, handleVote, isVoting, isVotingForSong, isLoading, styles }) => {
   const [currentSongIndex, setCurrentSongIndex] = useState(0);
   const [difficultyRatings, setDifficultyRatings] = useState({});
   const [submittingRating, setSubmittingRating] = useState(false);
@@ -928,7 +1017,7 @@ const VoteTab = ({ songs, user, handleVote, isVoting, isLoading, styles }) => {
   const [startPos, setStartPos] = useState({ x: 0, y: 0 });
 
   // Filter songs user hasn't voted on
-  const availableSongs = songs.filter(song => !song.votedByCurrentUser);
+  const availableSongs = songs ? songs.filter(song => !song.votedByCurrentUser) : [];
   const currentSong = availableSongs[currentSongIndex];
   const remainingSongs = availableSongs.length - currentSongIndex;
 
@@ -949,7 +1038,7 @@ const VoteTab = ({ songs, user, handleVote, isVoting, isLoading, styles }) => {
   };
 
   const handleCardAction = async (action) => {
-    if (!currentSong || isVoting) return;
+    if (!currentSong || (isVotingForSong && isVotingForSong(currentSong.id))) return;
 
     if (action === 'like') {
       await handleVote(currentSong.id, 'up');
@@ -1338,7 +1427,7 @@ const VoteTab = ({ songs, user, handleVote, isVoting, isLoading, styles }) => {
       }}>
         <button
           onClick={() => handleCardAction('dislike')}
-          disabled={isVoting}
+          disabled={isVotingForSong && isVotingForSong(currentSong.id)}
           style={{
             width: '60px',
             height: '60px',
@@ -1361,7 +1450,7 @@ const VoteTab = ({ songs, user, handleVote, isVoting, isLoading, styles }) => {
 
         <button
           onClick={() => handleCardAction('like')}
-          disabled={isVoting}
+          disabled={isVotingForSong && isVotingForSong(currentSong.id)}
           style={{
             width: '60px',
             height: '60px',
@@ -1386,7 +1475,7 @@ const VoteTab = ({ songs, user, handleVote, isVoting, isLoading, styles }) => {
   );
 };
 
-// RankingsTab Component
+// RankingsTab Component with enhanced table view
 const RankingsTab = ({ songs, isLoading, styles }) => {
   if (isLoading) {
     return (

@@ -23,44 +23,111 @@ const UserLoginForm = () => {
     
     if (!formData.phoneNumber) {
       newErrors.phoneNumber = 'Phone number is required';
-    } else if (formData.phoneNumber.length < 10) {
-      newErrors.phoneNumber = 'Please enter a valid phone number';
     }
+    // react-phone-number-input handles validation internally
+    // If phoneNumber has a value, it's already validated
     
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleChange = (field, value) => {
+  const handleChange = (e) => {
+    const { name, value, type, checked } = e.target;
     setFormData({
       ...formData,
-      [field]: value
+      [name]: type === 'checkbox' ? checked : value
     });
-    
-    // Clear error when user starts typing
-    if (errors[field]) {
-      setErrors({
-        ...errors,
-        [field]: ''
-      });
-    }
+  };
+
+  const handlePhoneChange = (value) => {
+    setFormData({
+      ...formData,
+      phoneNumber: value || ''
+    });
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     
+    console.log('UserLoginForm handleSubmit called');
+    console.log('Form data:', formData);
+    console.log('Form validation result:', validateForm());
+    
     if (validateForm()) {
-      // Pass phone number as first parameter, name as second, and musician flag as third
-      const success = await login(formData.phoneNumber, formData.fullName, formData.isMusician);
+      const loginData = {
+        fullName: formData.fullName,
+        phoneNumber: formData.phoneNumber,
+        isMusician: formData.isMusician
+      };
+      
+      console.log('Calling login with:', loginData);
+      console.log('Login data type:', typeof loginData);
+      console.log('Login data keys:', Object.keys(loginData));
+      
+      const success = await login(loginData);
       
       if (success) {
         console.log('Logged in successfully');
+      } else {
+        console.log('Login failed');
       }
+    } else {
+      console.log('Form validation failed:', errors);
     }
   };
 
   return (
-    <div className="bg-white p-6 rounded-xl shadow-lg w-full max-w-sm border border-indigo-100">
+    <>
+      <style jsx>{`
+        .phone-input {
+          width: 100%;
+        }
+        
+        .phone-input .PhoneInputInput {
+          border: 1px solid #c7d2fe;
+          border-radius: 0.5rem;
+          padding: 0.75rem 1rem;
+          font-size: 1rem;
+          transition: all 0.2s ease;
+          outline: none;
+          width: 100%;
+          background: white;
+        }
+        
+        .phone-input .PhoneInputInput:focus {
+          border-color: #4f46e5;
+          box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.2);
+        }
+        
+        .phone-input-error .PhoneInputInput {
+          border-color: #ef4444;
+        }
+        
+        .phone-input .PhoneInputCountrySelect {
+          border: 1px solid #c7d2fe;
+          border-radius: 0.5rem;
+          margin-right: 0.5rem;
+          padding: 0.75rem 0.5rem;
+          background: white;
+          outline: none;
+          transition: all 0.2s ease;
+        }
+        
+        .phone-input .PhoneInputCountrySelect:focus {
+          border-color: #4f46e5;
+          box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.2);
+        }
+        
+        .phone-input-error .PhoneInputCountrySelect {
+          border-color: #ef4444;
+        }
+        
+        .phone-input .PhoneInputCountrySelectArrow {
+          color: #6366f1;
+        }
+      `}</style>
+      
+      <div className="bg-white p-6 rounded-xl shadow-lg w-full max-w-sm border border-indigo-100">
       <div className="text-center mb-6">
         <h1 className="text-2xl font-bold text-indigo-700 mb-1 mt-3">Sign In</h1>
         <p className="text-indigo-400 text-sm">Enter your details to continue</p>
@@ -70,7 +137,7 @@ const UserLoginForm = () => {
         <div className="mb-4">
           <label htmlFor="fullName" className="block text-sm font-medium text-gray-700 mb-1 flex items-center">
             <User size={16} className="mr-1 text-indigo-500" />
-            Full Name
+            Full Name (not phone number)
           </label>
           <input
             type="text"
@@ -78,8 +145,8 @@ const UserLoginForm = () => {
             name="fullName"
             className={`w-full p-3 border ${errors.fullName ? 'border-red-500' : 'border-indigo-200'} rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:outline-none transition-all duration-200`}
             value={formData.fullName}
-            onChange={(e) => handleChange('fullName', e.target.value)}
-            placeholder="Enter your full name"
+            onChange={handleChange}
+            placeholder="Enter your full name (e.g., John Smith)"
             autoComplete="name"
             autoCapitalize="words"
           />
@@ -89,28 +156,23 @@ const UserLoginForm = () => {
         </div>
         
         <div className="mb-6">
-          <label className="flex items-center cursor-pointer">
+          <div className="flex items-center">
             <input
               type="checkbox"
+              id="isMusician"
+              name="isMusician"
               checked={formData.isMusician}
-              onChange={(e) => handleChange('isMusician', e.target.checked)}
-              className="sr-only"
+              onChange={handleChange}
+              className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
             />
-            <div className={`relative w-5 h-5 rounded border-2 transition-all duration-200 ${
-              formData.isMusician 
-                ? 'bg-indigo-600 border-indigo-600' 
-                : 'border-indigo-200'
-            }`}>
-              {formData.isMusician && (
-                <Check size={12} className="absolute top-0.5 left-0.5 text-white" />
-              )}
-            </div>
-            <span className="ml-2 text-sm text-gray-700 flex items-center">
+            <label htmlFor="isMusician" className="ml-2 block text-sm text-gray-900 flex items-center">
               <Music size={16} className="mr-1 text-indigo-500" />
-              I am a musician in the group
-            </span>
-          </label>
-          <p className="mt-1 text-xs text-gray-500">Musicians can provide difficulty ratings for songs</p>
+              I am a musician
+            </label>
+          </div>
+          <p className="mt-1 text-xs text-gray-500">
+            Musicians can rate song difficulty and access additional features
+          </p>
         </div>
         
         <div className="mb-6">
@@ -118,20 +180,22 @@ const UserLoginForm = () => {
             <Phone size={16} className="mr-1 text-indigo-500" />
             Phone Number
           </label>
-          <div className={`w-full ${errors.phoneNumber ? 'phone-input-error' : ''}`}>
-            <PhoneInput
-              value={formData.phoneNumber}
-              onChange={(value) => handleChange('phoneNumber', value)}
-              defaultCountry="IE"
-              placeholder="Enter phone number"
-              className="w-full"
-              style={{
-                '--PhoneInputCountryFlag-height': '1.2em',
-                '--PhoneInputCountrySelectArrow-opacity': 0.6
-              }}
-            />
-          </div>
-          <p className="mt-1 text-xs text-gray-500">International format recommended</p>
+          <PhoneInput
+            international
+            countryCallingCodeEditable={false}
+            defaultCountry="IE"
+            value={formData.phoneNumber}
+            onChange={handlePhoneChange}
+            className={`phone-input ${errors.phoneNumber ? 'phone-input-error' : ''}`}
+            placeholder="Enter your phone number"
+            style={{
+              '--PhoneInputCountryFlag-aspectRatio': '1.5',
+              '--PhoneInputCountrySelectArrow-color': '#6366f1',
+            }}
+          />
+          <p className="mt-1 text-xs text-gray-500">
+            Select your country and enter your phone number
+          </p>
           {errors.phoneNumber && (
             <p className="mt-1 text-sm text-red-600">{errors.phoneNumber}</p>
           )}
@@ -163,14 +227,13 @@ const UserLoginForm = () => {
           )}
         </button>
         
-        <div className="mt-4 p-3 bg-indigo-50 rounded-lg border border-indigo-100">
-          <p className="text-xs text-center text-indigo-600">
-            <strong>Existing users:</strong> You can use any phone number for now.
-            Your data is linked by name.
-          </p>
-        </div>
+        <p className="mt-4 text-xs text-center text-gray-500">
+          Your phone number is stored in encrypted format so it not
+          readable by humans.
+        </p>
       </form>
     </div>
+    </>
   );
 };
 
