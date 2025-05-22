@@ -1514,47 +1514,8 @@ const RankingsTab = ({ songs, isLoading, styles }) => {
             Go to the Suggest tab to add a song!
           </p>
         </div>
-      ) : (
-        <div>
-          {/* Legend */}
-          <div style={{ 
-            padding: '12px', 
-            marginBottom: '16px', 
-            background: 'linear-gradient(to right, #eef2ff, #dbeafe)', 
-            borderRadius: '8px', 
-            border: '1px solid #e0e7ff',
-            fontSize: '12px',
-            color: '#4338ca'
-          }}>
-            <strong>Legend:</strong>
-            <div style={{ display: 'flex', gap: '16px', marginTop: '4px', flexWrap: 'wrap' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <div style={{ padding: '2px 4px', background: '#dcfce7', borderRadius: '4px', color: '#16a34a' }}>👍</div>
-                <span>Upvotes</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <div style={{ padding: '2px 4px', background: '#fee2e2', borderRadius: '4px', color: '#dc2626' }}>👎</div>
-                <span>Downvotes</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: '#10b981' }}></div>
-                <span>Easy (1-3)</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: '#f59e0b' }}></div>
-                <span>Medium (4-6)</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: '#ef4444' }}></div>
-                <span>Hard (7-10)</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <Play size={12} style={{ color: '#f59e0b' }} />
-                <span>YouTube link</span>
-              </div>
-            </div>
-          </div>
-          
+      ) : (  
+        <div>      
           {/* Rankings Table */}
           <div style={{ 
             background: 'white', 
