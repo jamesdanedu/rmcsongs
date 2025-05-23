@@ -1459,7 +1459,7 @@ const SuggestTab = ({
               {canSuggest 
                 ? 'You can suggest up to 3 songs every 30 days'
                 : formattedNextDate 
-                  ? `You can suggest again on ${formattedNextDate}`
+                  ? 'You\'ve reached your limit of 3 suggestions per 30 days'
                   : 'You\'ve reached your limit of 3 suggestions per 30 days'
               }
             </p>
