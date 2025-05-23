@@ -308,14 +308,15 @@ const styles = {
     color: 'white'
   },
 
-  // Table styles for rankings
+  // Table styles for rankings - More Compact
   table: {
     width: '100%',
     borderCollapse: 'collapse',
     background: 'white',
     borderRadius: '8px',
     overflow: 'hidden',
-    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
+    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+    fontSize: '13px'
   },
 
   tableHeader: {
@@ -334,22 +335,43 @@ const styles = {
   },
 
   tableCell: {
-    padding: '12px 16px',
+    padding: '8px 12px',
     textAlign: 'left',
-    fontSize: '14px'
+    fontSize: '13px',
+    lineHeight: '1.3'
   },
 
   tableCellHeader: {
-    padding: '16px',
+    padding: '12px 8px',
     textAlign: 'left',
-    fontSize: '14px',
+    fontSize: '12px',
     fontWeight: '600'
   },
 
   tableCellCenter: {
-    padding: '12px 16px',
+    padding: '8px 6px',
     textAlign: 'center',
-    fontSize: '14px'
+    fontSize: '13px'
+  },
+
+  tableCellCenterHeader: {
+    padding: '12px 6px',
+    textAlign: 'center',
+    fontSize: '12px',
+    fontWeight: '600'
+  },
+
+  // Compact rank badge
+  rankBadge: {
+    fontWeight: 'bold',
+    width: '20px',
+    height: '20px',
+    borderRadius: '50%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: '11px',
+    margin: '0 auto'
   },
 
   // Input styles
@@ -1663,7 +1685,7 @@ const VoteTab = ({ songs, currentSongIndex, user, handleUpvote, handleDownvote, 
   );
 };
 
-// RankingsTab Component - Table Format
+// RankingsTab Component - Compact Table with Icon Headers
 const RankingsTab = ({ songs, isLoading, styles }) => {
   const [showPlayer, setShowPlayer] = useState(false);
   const [selectedSong, setSelectedSong] = useState(null);
@@ -1685,23 +1707,26 @@ const RankingsTab = ({ songs, isLoading, styles }) => {
 
   // Sort by upvotes first, then by lowest difficulty (if available)
   const sortedSongs = [...(songs || [])].sort((a, b) => {
-    // First sort by upvotes (descending)
-    if (b.upvotes !== a.upvotes) {
-      return (b.upvotes || 0) - (a.upvotes || 0);
+    // First sort by upvotes (descending) - ensure we have numbers
+    const aUpvotes = parseInt(a.upvotes) || 0;
+    const bUpvotes = parseInt(b.upvotes) || 0;
+    
+    if (bUpvotes !== aUpvotes) {
+      return bUpvotes - aUpvotes;
     }
     
     // If upvotes are equal, sort by difficulty (ascending - easier first)
-    const aDiff = a.averageDifficulty;
-    const bDiff = b.averageDifficulty;
+    const aDiff = parseFloat(a.averageDifficulty);
+    const bDiff = parseFloat(b.averageDifficulty);
     
     // If both have difficulty ratings
-    if (aDiff && bDiff) {
+    if (!isNaN(aDiff) && !isNaN(bDiff)) {
       return aDiff - bDiff;
     }
     
     // If only one has difficulty rating, prioritize the one with rating
-    if (aDiff && !bDiff) return -1;
-    if (!aDiff && bDiff) return 1;
+    if (!isNaN(aDiff) && isNaN(bDiff)) return -1;
+    if (isNaN(aDiff) && !isNaN(bDiff)) return 1;
     
     // If neither has difficulty rating, maintain current order
     return 0;
@@ -1730,12 +1755,17 @@ const RankingsTab = ({ songs, isLoading, styles }) => {
             <table style={styles.table}>
               <thead style={styles.tableHeader}>
                 <tr>
-                  <th style={styles.tableCellHeader}>Rank</th>
-                  <th style={styles.tableCellHeader}>Song Name</th>
-                  <th style={styles.tableCellHeader}>Artist</th>
-                  <th style={styles.tableCellHeader}>Upvotes</th>
-                  <th style={styles.tableCellHeader}>Downvotes</th>
-                  <th style={styles.tableCellHeader}>Difficulty</th>
+                  <th style={{ ...styles.tableCellCenterHeader, width: '40px' }}>#</th>
+                  <th style={styles.tableCellHeader}>Song</th>
+                  <th style={{ ...styles.tableCellCenterHeader, width: '50px' }}>
+                    <ThumbsUp size={14} title="Upvotes" />
+                  </th>
+                  <th style={{ ...styles.tableCellCenterHeader, width: '50px' }}>
+                    <ThumbsDown size={14} title="Downvotes" />
+                  </th>
+                  <th style={{ ...styles.tableCellCenterHeader, width: '60px' }}>
+                    <Star size={14} title="Difficulty" />
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -1756,76 +1786,56 @@ const RankingsTab = ({ songs, isLoading, styles }) => {
                   >
                     <td style={styles.tableCellCenter}>
                       <div style={{
-                        fontWeight: 'bold',
-                        width: '24px',
-                        height: '24px',
-                        borderRadius: '50%',
+                        ...styles.rankBadge,
                         background: index < 3 ? '#fbbf24' : '#4f46e5',
-                        color: 'white',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: '12px',
-                        margin: '0 auto'
+                        color: 'white'
                       }}>
                         {index + 1}
                       </div>
                     </td>
                     <td style={styles.tableCell}>
-                      <div style={{ fontWeight: '600', color: '#1f2937' }}>
+                      <div style={{ fontWeight: '600', color: '#1f2937', marginBottom: '2px' }}>
                         {song.title || 'Untitled'}
                       </div>
+                      <div style={{ fontSize: '12px', color: '#6b7280' }}>
+                        {song.artist || 'Unknown Artist'}
+                      </div>
                       {song.youtubeVideoId && (
-                        <div style={{ fontSize: '12px', color: '#f59e0b', marginTop: '2px', display: 'flex', alignItems: 'center' }}>
-                          <Play size={10} style={{ marginRight: '4px' }} />
+                        <div style={{ fontSize: '10px', color: '#f59e0b', marginTop: '2px', display: 'flex', alignItems: 'center' }}>
+                          <Play size={8} style={{ marginRight: '2px' }} />
                           Click to play
                         </div>
                       )}
                     </td>
-                    <td style={styles.tableCell}>
-                      {song.artist || 'Unknown Artist'}
-                    </td>
                     <td style={styles.tableCellCenter}>
                       <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '4px',
                         color: '#10b981',
-                        fontWeight: '600'
+                        fontWeight: '600',
+                        fontSize: '14px'
                       }}>
-                        <ThumbsUp size={14} />
-                        {song.upvotes || 0}
+                        {parseInt(song.upvotes) || 0}
                       </div>
                     </td>
                     <td style={styles.tableCellCenter}>
                       <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '4px',
                         color: '#ef4444',
-                        fontWeight: '600'
+                        fontWeight: '600',
+                        fontSize: '14px'
                       }}>
-                        <ThumbsDown size={14} />
-                        {song.downvotes || 0}
+                        {parseInt(song.downvotes) || 0}
                       </div>
                     </td>
                     <td style={styles.tableCellCenter}>
-                      {song.averageDifficulty ? (
+                      {song.averageDifficulty && !isNaN(parseFloat(song.averageDifficulty)) ? (
                         <div style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '4px',
                           color: '#f59e0b',
-                          fontWeight: '600'
+                          fontWeight: '600',
+                          fontSize: '14px'
                         }}>
-                          <Star size={14} />
-                          {song.averageDifficulty.toFixed(1)}
+                          {parseFloat(song.averageDifficulty).toFixed(1)}
                         </div>
                       ) : (
-                        <span style={{ color: '#9ca3af', fontSize: '12px' }}>NR</span>
+                        <span style={{ color: '#9ca3af', fontSize: '11px' }}>NR</span>
                       )}
                     </td>
                   </tr>
