@@ -9,7 +9,8 @@ const UserLoginForm = () => {
   const { login, error: authError, isLoading } = useAuth();
   const [formData, setFormData] = useState({
     fullName: '',
-    phoneNumber: ''
+    phoneNumber: '',
+    isMusician: false
   });
   const [errors, setErrors] = useState({});
 
@@ -38,7 +39,8 @@ const UserLoginForm = () => {
     if (validateForm()) {
       const success = await login({
         fullName: formData.fullName.trim(),
-        phoneNumber: formData.phoneNumber
+        phoneNumber: formData.phoneNumber,
+        isMusician: formData.isMusician
       });
       
       if (success) {
@@ -75,6 +77,13 @@ const UserLoginForm = () => {
         phoneNumber: ''
       });
     }
+  };
+
+  const handleMusicianChange = (e) => {
+    setFormData({
+      ...formData,
+      isMusician: e.target.checked
+    });
   };
 
   return (
@@ -126,7 +135,7 @@ const UserLoginForm = () => {
             <p className="text-gray-600 text-sm">Enter your details to continue to the song wishlist</p>
           </div>
           
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '60px' }}>
             <div>
               <label htmlFor="fullName" className="block text-sm font-medium text-gray-700 mb-2">
                 Full Name
@@ -192,6 +201,22 @@ const UserLoginForm = () => {
                   <p>{errors.phoneNumber}</p>
                 </div>
               )}
+            </div>
+
+            <div>
+              <div className="flex items-center space-x-3 p-4 bg-gradient-to-r from-indigo-50 to-blue-50 rounded-xl border border-indigo-100 transition-all duration-200 hover:shadow-sm">
+                <input
+                  type="checkbox"
+                  id="isMusician"
+                  checked={formData.isMusician}
+                  onChange={handleMusicianChange}
+                  disabled={isLoading}
+                  className="w-5 h-5 text-indigo-600 bg-white border-2 border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 focus:ring-offset-0 cursor-pointer disabled:cursor-not-allowed"
+                />
+                <label htmlFor="isMusician" className="text-sm font-medium text-gray-800 cursor-pointer select-none">
+                  I am a musician
+                </label>
+              </div>
             </div>
 
             {authError && (
