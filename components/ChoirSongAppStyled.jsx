@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { X, Mic, PlusCircle, Heart, BarChart3, Music, ListMusic, UserPlus, Star, Search, Play, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { X, Mic, PlusCircle, Heart, BarChart3, Music, ListMusic, UserPlus, Star, Search, Play, ThumbsUp, ThumbsDown, SkipForward } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useSongs } from '../hooks/useSongs';
 import { useVotes } from '../hooks/useVotes';
@@ -13,11 +13,11 @@ const styles = {
   pageContainer: {
     minHeight: '100vh',
     background: 'linear-gradient(to bottom, #eef2ff, #ffffff, #eef2ff)',
-    paddingBottom: '100px' // Increased to account for tab navigation
+    paddingBottom: '100px'
   },
   
   maxWidthContainer: {
-    maxWidth: '448px', // md equivalent
+    maxWidth: '448px',
     margin: '0 auto',
     padding: '0 16px'
   },
@@ -54,6 +54,302 @@ const styles = {
     border: '1px solid #e0e7ff',
     transition: 'all 0.3s ease',
     marginBottom: '16px'
+  },
+
+  // Single song card for vote tab
+  singleSongCard: {
+    background: 'white',
+    borderRadius: '16px',
+    boxShadow: '0 8px 25px rgba(0, 0, 0, 0.15)',
+    border: '1px solid #e0e7ff',
+    overflow: 'hidden',
+    marginBottom: '24px',
+    cursor: 'grab',
+    userSelect: 'none',
+    position: 'relative',
+    transition: 'all 0.3s ease'
+  },
+
+  singleSongCardDragging: {
+    cursor: 'grabbing',
+    transform: 'scale(1.02)',
+    boxShadow: '0 12px 35px rgba(0, 0, 0, 0.2)',
+    zIndex: 10
+  },
+
+  // YouTube thumbnail area
+  thumbnailContainer: {
+    position: 'relative',
+    height: '200px',
+    background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
+    overflow: 'hidden'
+  },
+
+  thumbnailImage: {
+    width: '100%',
+    height: '100%',
+    objectFit: 'cover'
+  },
+
+  thumbnailPlaceholder: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '8px',
+    color: 'white'
+  },
+
+  playOverlay: {
+    position: 'absolute',
+    inset: 0,
+    background: 'rgba(0, 0, 0, 0.3)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    opacity: 0,
+    transition: 'opacity 0.2s ease'
+  },
+
+  playButton: {
+    background: 'rgba(255, 255, 255, 0.9)',
+    borderRadius: '50%',
+    width: '60px',
+    height: '60px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    border: 'none',
+    cursor: 'pointer'
+  },
+
+  // Song content area
+  songInfo: {
+    padding: '20px'
+  },
+
+  songTitle: {
+    fontSize: '20px',
+    fontWeight: 'bold',
+    color: '#1f2937',
+    marginBottom: '8px',
+    lineHeight: '1.2'
+  },
+
+  songArtist: {
+    fontSize: '16px',
+    color: '#6b7280',
+    marginBottom: '12px'
+  },
+
+  songNotes: {
+    fontSize: '14px',
+    color: '#6b7280',
+    fontStyle: 'italic',
+    marginBottom: '16px',
+    padding: '12px',
+    background: '#f9fafb',
+    borderRadius: '8px',
+    borderLeft: '3px solid #e0e7ff'
+  },
+
+  // Difficulty slider for musicians
+  difficultySection: {
+    marginBottom: '20px',
+    padding: '16px',
+    background: 'linear-gradient(to right, #fef3c7, #fed7aa)',
+    borderRadius: '8px',
+    border: '1px solid #f59e0b'
+  },
+
+  difficultyLabel: {
+    fontSize: '14px',
+    fontWeight: '600',
+    color: '#92400e',
+    marginBottom: '8px',
+    display: 'flex',
+    alignItems: 'center'
+  },
+
+  difficultySlider: {
+    width: '100%',
+    height: '6px',
+    borderRadius: '3px',
+    background: '#e5e7eb',
+    outline: 'none',
+    cursor: 'pointer'
+  },
+
+  difficultyValue: {
+    textAlign: 'center',
+    marginTop: '8px',
+    fontSize: '16px',
+    fontWeight: 'bold',
+    color: '#92400e'
+  },
+
+  // Voting controls
+  votingControls: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: '16px',
+    marginTop: '20px'
+  },
+
+  skipButton: {
+    padding: '12px',
+    borderRadius: '50%',
+    background: '#f3f4f6',
+    border: '1px solid #d1d5db',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transition: 'all 0.2s ease'
+  },
+
+  downvoteButton: {
+    padding: '16px 24px',
+    borderRadius: '50px',
+    background: 'linear-gradient(to right, #ef4444, #dc2626)',
+    color: 'white',
+    border: 'none',
+    fontSize: '16px',
+    fontWeight: '600',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    transition: 'all 0.2s ease',
+    minWidth: '120px',
+    justifyContent: 'center'
+  },
+
+  upvoteButton: {
+    padding: '16px 24px',
+    borderRadius: '50px',
+    background: 'linear-gradient(to right, #10b981, #059669)',
+    color: 'white',
+    border: 'none',
+    fontSize: '16px',
+    fontWeight: '600',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    transition: 'all 0.2s ease',
+    minWidth: '120px',
+    justifyContent: 'center'
+  },
+
+  votingButton: {
+    padding: '16px 24px',
+    borderRadius: '50px',
+    background: '#e5e7eb',
+    color: '#6b7280',
+    border: 'none',
+    fontSize: '16px',
+    fontWeight: '600',
+    cursor: 'not-allowed',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    minWidth: '120px',
+    justifyContent: 'center'
+  },
+
+  // Progress indicator
+  progressIndicator: {
+    textAlign: 'center',
+    marginBottom: '20px',
+    padding: '12px',
+    background: 'linear-gradient(to right, #eef2ff, #dbeafe)',
+    borderRadius: '8px',
+    border: '1px solid #e0e7ff'
+  },
+
+  progressText: {
+    fontSize: '14px',
+    fontWeight: '600',
+    color: '#4338ca'
+  },
+
+  // Swipe indicators for single card
+  swipeIndicator: {
+    position: 'absolute',
+    top: '50%',
+    transform: 'translateY(-50%)',
+    fontSize: '18px',
+    fontWeight: 'bold',
+    padding: '12px 20px',
+    borderRadius: '25px',
+    opacity: 0,
+    transition: 'opacity 0.2s ease',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    pointerEvents: 'none',
+    zIndex: 5
+  },
+
+  swipeIndicatorLeft: {
+    left: '20px',
+    background: 'linear-gradient(to right, #ef4444, #dc2626)',
+    color: 'white'
+  },
+
+  swipeIndicatorRight: {
+    right: '20px',
+    background: 'linear-gradient(to right, #10b981, #059669)',
+    color: 'white'
+  },
+
+  // Table styles for rankings
+  table: {
+    width: '100%',
+    borderCollapse: 'collapse',
+    background: 'white',
+    borderRadius: '8px',
+    overflow: 'hidden',
+    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
+  },
+
+  tableHeader: {
+    background: 'linear-gradient(to right, #4f46e5, #6366f1)',
+    color: 'white'
+  },
+
+  tableRow: {
+    borderBottom: '1px solid #e5e7eb',
+    cursor: 'pointer',
+    transition: 'background-color 0.2s ease'
+  },
+
+  tableRowHover: {
+    backgroundColor: '#f9fafb'
+  },
+
+  tableCell: {
+    padding: '12px 16px',
+    textAlign: 'left',
+    fontSize: '14px'
+  },
+
+  tableCellHeader: {
+    padding: '16px',
+    textAlign: 'left',
+    fontSize: '14px',
+    fontWeight: '600'
+  },
+
+  tableCellCenter: {
+    padding: '12px 16px',
+    textAlign: 'center',
+    fontSize: '14px'
   },
 
   // Input styles
@@ -112,47 +408,6 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: '4px'
-  },
-
-  upvoteButton: {
-    padding: '8px 16px',
-    borderRadius: '6px',
-    background: 'linear-gradient(to right, #10b981, #059669)',
-    color: 'white',
-    border: 'none',
-    fontSize: '14px',
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '4px',
-    transition: 'all 0.2s ease'
-  },
-
-  downvoteButton: {
-    padding: '8px 16px',
-    borderRadius: '6px',
-    background: 'linear-gradient(to right, #ef4444, #dc2626)',
-    color: 'white',
-    border: 'none',
-    fontSize: '14px',
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '4px',
-    transition: 'all 0.2s ease'
-  },
-
-  votingButton: {
-    padding: '8px 16px',
-    borderRadius: '6px',
-    background: '#e5e7eb',
-    color: '#6b7280',
-    border: 'none',
-    fontSize: '14px',
-    cursor: 'not-allowed',
-    display: 'flex',
-    alignItems: 'center',
     gap: '4px'
   },
 
@@ -263,34 +518,6 @@ const styles = {
     fontSize: '14px'
   },
 
-  // Song card styles
-  songCard: {
-    border: '1px solid #e0e7ff',
-    borderRadius: '8px',
-    background: 'linear-gradient(to right, #eef2ff, #dbeafe)',
-    overflow: 'hidden',
-    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-    transition: 'all 0.3s ease',
-    marginBottom: '16px',
-    cursor: 'grab',
-    userSelect: 'none',
-    position: 'relative'
-  },
-
-  songCardDragging: {
-    cursor: 'grabbing',
-    transform: 'scale(1.02)',
-    boxShadow: '0 8px 25px rgba(0, 0, 0, 0.15)',
-    zIndex: 10
-  },
-
-  songContent: {
-    padding: '16px',
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start'
-  },
-
   // Empty state styles
   emptyState: {
     textAlign: 'center',
@@ -298,53 +525,6 @@ const styles = {
     background: 'linear-gradient(to right, #eef2ff, #dbeafe)',
     borderRadius: '8px',
     border: '1px solid #e0e7ff'
-  },
-
-  // Ranking bar styles
-  rankingBar: {
-    height: '40px',
-    background: 'linear-gradient(to right, #818cf8, #60a5fa)',
-    borderRadius: '8px',
-    position: 'relative',
-    overflow: 'hidden',
-    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-    transition: 'all 0.3s ease',
-    display: 'flex',
-    alignItems: 'center',
-    padding: '0 12px',
-    color: 'white',
-    fontWeight: '500',
-    marginBottom: '12px'
-  },
-
-  // Swipe indicators
-  swipeIndicator: {
-    position: 'absolute',
-    top: '50%',
-    transform: 'translateY(-50%)',
-    fontSize: '16px',
-    fontWeight: 'bold',
-    padding: '8px 16px',
-    borderRadius: '20px',
-    opacity: 0,
-    transition: 'opacity 0.2s ease',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '4px',
-    pointerEvents: 'none',
-    zIndex: 2
-  },
-
-  swipeIndicatorLeft: {
-    left: '16px',
-    background: 'linear-gradient(to right, #ef4444, #dc2626)',
-    color: 'white'
-  },
-
-  swipeIndicatorRight: {
-    right: '16px',
-    background: 'linear-gradient(to right, #10b981, #059669)',
-    color: 'white'
   },
 
   // YouTube search styles
@@ -378,46 +558,51 @@ const styles = {
     marginBottom: '8px'
   },
 
-  // Vote count display styles
-  voteCountDisplay: {
+  // YouTube player modal
+  playerModal: {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    background: 'rgba(0, 0, 0, 0.8)',
     display: 'flex',
-    flexDirection: 'column',
     alignItems: 'center',
-    gap: '8px'
+    justifyContent: 'center',
+    zIndex: 1000,
+    padding: '20px'
   },
 
-  voteCountBadge: {
-    background: 'linear-gradient(to right, #eef2ff, #dbeafe)',
-    color: '#4338ca',
-    padding: '8px 12px',
-    borderRadius: '20px',
-    fontSize: '14px',
+  playerContainer: {
+    background: 'white',
+    borderRadius: '12px',
+    padding: '20px',
+    width: '100%',
+    maxWidth: '800px',
+    maxHeight: '90vh',
+    overflow: 'auto'
+  },
+
+  playerHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '16px'
+  },
+
+  playerTitle: {
+    fontSize: '18px',
     fontWeight: '600',
-    display: 'flex',
-    alignItems: 'center',
-    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
+    color: '#1f2937'
   },
 
-  voteBreakdown: {
-    display: 'flex',
-    gap: '8px',
-    fontSize: '12px'
-  },
-
-  upvoteCount: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '4px',
-    color: '#10b981',
-    fontWeight: '500'
-  },
-
-  downvoteCount: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '4px',
-    color: '#ef4444',
-    fontWeight: '500'
+  closeButton: {
+    background: 'none',
+    border: 'none',
+    cursor: 'pointer',
+    padding: '8px',
+    borderRadius: '4px',
+    color: '#6b7280'
   }
 };
 
@@ -494,11 +679,49 @@ const ChoirIcon = ({ size = 28 }) => {
   );
 };
 
-// SwipeableSongCard Component
-const SwipeableSongCard = ({ song, onUpvote, onDownvote, isVoting, styles }) => {
+// YouTube Player Modal Component
+const YouTubePlayerModal = ({ videoId, title, isOpen, onClose }) => {
+  if (!isOpen || !videoId) return null;
+
+  const embedUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0`;
+
+  return (
+    <div style={styles.playerModal} onClick={onClose}>
+      <div style={styles.playerContainer} onClick={(e) => e.stopPropagation()}>
+        <div style={styles.playerHeader}>
+          <h3 style={styles.playerTitle}>{title}</h3>
+          <button style={styles.closeButton} onClick={onClose}>
+            <X size={24} />
+          </button>
+        </div>
+        <div style={{ position: 'relative', paddingBottom: '56.25%', height: 0 }}>
+          <iframe
+            src={embedUrl}
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+              border: 'none',
+              borderRadius: '8px'
+            }}
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+          />
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Single Song Vote Card Component
+const SingleSongVoteCard = ({ song, onUpvote, onDownvote, onSkip, isVoting, isMusician, styles }) => {
   const [dragOffset, setDragOffset] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [startX, setStartX] = useState(0);
+  const [difficulty, setDifficulty] = useState(5);
+  const [showPlayer, setShowPlayer] = useState(false);
 
   const handleStart = (clientX) => {
     if (isVoting) return;
@@ -509,18 +732,17 @@ const SwipeableSongCard = ({ song, onUpvote, onDownvote, isVoting, styles }) => 
   const handleMove = (clientX) => {
     if (!isDragging || isVoting) return;
     const offset = clientX - startX;
-    setDragOffset(Math.max(Math.min(offset, 150), -150)); // Limit drag distance
+    setDragOffset(Math.max(Math.min(offset, 150), -150));
   };
 
   const handleEnd = () => {
     if (isDragging && !isVoting) {
-      // Handle swipe action based on drag distance
       if (dragOffset > 50) {
         // Swipe right - upvote
-        onUpvote(song.id);
+        onUpvote(song.id, isMusician ? difficulty : null);
       } else if (dragOffset < -50) {
         // Swipe left - downvote  
-        onDownvote(song.id);
+        onDownvote(song.id, isMusician ? difficulty : null);
       }
     }
     
@@ -563,8 +785,8 @@ const SwipeableSongCard = ({ song, onUpvote, onDownvote, isVoting, styles }) => 
   };
 
   const cardStyle = {
-    ...styles.songCard,
-    ...(isDragging ? styles.songCardDragging : {}),
+    ...styles.singleSongCard,
+    ...(isDragging ? styles.singleSongCardDragging : {}),
     transform: `translateX(${dragOffset}px)`,
     cursor: isVoting ? 'not-allowed' : (isDragging ? 'grabbing' : 'grab')
   };
@@ -572,142 +794,202 @@ const SwipeableSongCard = ({ song, onUpvote, onDownvote, isVoting, styles }) => 
   const leftIndicatorOpacity = Math.max(0, Math.min(1, -dragOffset / 100));
   const rightIndicatorOpacity = Math.max(0, Math.min(1, dragOffset / 100));
 
-  return (
-    <div 
-      style={cardStyle}
-      onMouseDown={handleMouseDown}
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
-    >
-      {/* Swipe Indicators */}
-      <div 
-        style={{
-          ...styles.swipeIndicator,
-          ...styles.swipeIndicatorLeft,
-          opacity: leftIndicatorOpacity
-        }}
-      >
-        <ThumbsDown size={16} />
-        <span>Downvote</span>
-      </div>
-      <div 
-        style={{
-          ...styles.swipeIndicator,
-          ...styles.swipeIndicatorRight,
-          opacity: rightIndicatorOpacity
-        }}
-      >
-        <ThumbsUp size={16} />
-        <span>Upvote</span>
-      </div>
+  const getThumbnailUrl = (videoId) => {
+    if (!videoId) return null;
+    return `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`;
+  };
 
-      <div style={styles.songContent}>
-        <div style={{ flex: 1 }}>
-          <h3 style={{ fontWeight: '600', color: '#4338ca', marginBottom: '4px', fontSize: '16px' }}>
-            {song.title || 'Untitled'}
-          </h3>
-          <p style={{ fontSize: '14px', color: '#4f46e5', marginBottom: '4px' }}>
-            {song.artist || 'Unknown Artist'}
-          </p>
-          {song.youtubeTitle && (
-            <p style={{ 
-              fontSize: '12px', 
-              color: '#f59e0b', 
-              marginBottom: '4px',
-              display: 'flex',
-              alignItems: 'center'
-            }}>
-              <Play size={12} style={{ marginRight: '4px' }} />
-              YouTube: {song.youtubeTitle}
-            </p>
-          )}
-          {song.notes && (
-            <p style={{ 
-              fontSize: '13px', 
-              color: '#6b7280', 
-              marginTop: '8px', 
-              borderTop: '1px solid #e0e7ff', 
-              paddingTop: '8px',
-              fontStyle: 'italic'
-            }}>
-              {song.notes}
-            </p>
-          )}
-          <p style={{ 
-            fontSize: '12px', 
-            color: '#818cf8', 
-            marginTop: '8px',
-            display: 'flex',
-            alignItems: 'center'
-          }}>
-            <Mic size={12} style={{ marginRight: '4px' }} />
-            Suggested by: {song.suggestedBy || 'Unknown'}
-          </p>
+  const handleThumbnailClick = () => {
+    if (song.youtubeVideoId) {
+      setShowPlayer(true);
+    }
+  };
+
+  return (
+    <>
+      <div 
+        style={cardStyle}
+        onMouseDown={handleMouseDown}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      >
+        {/* Swipe Indicators */}
+        <div 
+          style={{
+            ...styles.swipeIndicator,
+            ...styles.swipeIndicatorLeft,
+            opacity: leftIndicatorOpacity
+          }}
+        >
+          <ThumbsDown size={20} />
+          <span>Downvote</span>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginLeft: '16px', gap: '8px', minWidth: '120px' }}>
-          <div style={{
-            fontSize: '11px',
-            color: '#6b7280',
-            textAlign: 'center',
-            lineHeight: '1.2'
-          }}>
-            Swipe or tap to vote
-          </div>
-          <div style={{ display: 'flex', gap: '6px' }}>
-            <button 
-              style={isVoting ? styles.votingButton : styles.upvoteButton}
-              onClick={(e) => {
-                e.stopPropagation();
-                if (!isVoting) onUpvote(song.id);
-              }}
+        <div 
+          style={{
+            ...styles.swipeIndicator,
+            ...styles.swipeIndicatorRight,
+            opacity: rightIndicatorOpacity
+          }}
+        >
+          <ThumbsUp size={20} />
+          <span>Upvote</span>
+        </div>
+
+        {/* YouTube Thumbnail */}
+        <div 
+          style={styles.thumbnailContainer}
+          onClick={handleThumbnailClick}
+          onMouseOver={(e) => {
+            const overlay = e.currentTarget.querySelector('.play-overlay');
+            if (overlay) overlay.style.opacity = '1';
+          }}
+          onMouseOut={(e) => {
+            const overlay = e.currentTarget.querySelector('.play-overlay');
+            if (overlay) overlay.style.opacity = '0';
+          }}
+        >
+          {song.youtubeVideoId ? (
+            <>
+              <img 
+                src={getThumbnailUrl(song.youtubeVideoId)}
+                alt="YouTube thumbnail"
+                style={styles.thumbnailImage}
+                onError={(e) => {
+                  e.target.style.display = 'none';
+                  e.target.nextElementSibling.style.display = 'flex';
+                }}
+              />
+              <div style={styles.thumbnailPlaceholder} className="thumbnail-fallback" hidden>
+                <Music size={48} />
+                <span style={{ fontSize: '16px', fontWeight: '500' }}>
+                  {song.title}
+                </span>
+              </div>
+              <div className="play-overlay" style={styles.playOverlay}>
+                <button style={styles.playButton}>
+                  <Play size={24} color="#4f46e5" />
+                </button>
+              </div>
+            </>
+          ) : (
+            <div style={styles.thumbnailPlaceholder}>
+              <Music size={48} />
+              <span style={{ fontSize: '16px', fontWeight: '500' }}>
+                {song.title}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Song Information */}
+        <div style={styles.songInfo}>
+          <h2 style={styles.songTitle}>{song.title}</h2>
+          <p style={styles.songArtist}>{song.artist}</p>
+          
+          {song.notes && (
+            <div style={styles.songNotes}>
+              {song.notes}
+            </div>
+          )}
+
+          {/* Difficulty Slider for Musicians */}
+          {isMusician && (
+            <div style={styles.difficultySection}>
+              <div style={styles.difficultyLabel}>
+                <Star size={16} style={{ marginRight: '4px' }} />
+                Rate Difficulty
+              </div>
+              <input
+                type="range"
+                min="1"
+                max="10"
+                value={difficulty}
+                onChange={(e) => setDifficulty(parseInt(e.target.value))}
+                style={styles.difficultySlider}
+              />
+              <div style={styles.difficultyValue}>
+                {difficulty}/10
+              </div>
+            </div>
+          )}
+
+          {/* Voting Controls */}
+          <div style={styles.votingControls}>
+            <button
+              style={styles.skipButton}
+              onClick={() => onSkip(song.id)}
               disabled={isVoting}
               onMouseOver={(e) => {
                 if (!isVoting) {
-                  e.target.style.background = 'linear-gradient(to right, #059669, #047857)';
+                  e.target.style.background = '#e5e7eb';
                 }
               }}
               onMouseOut={(e) => {
                 if (!isVoting) {
-                  e.target.style.background = 'linear-gradient(to right, #10b981, #059669)';
+                  e.target.style.background = '#f3f4f6';
                 }
               }}
             >
-              <ThumbsUp size={14} />
+              <SkipForward size={20} color="#6b7280" />
             </button>
+
             <button 
               style={isVoting ? styles.votingButton : styles.downvoteButton}
-              onClick={(e) => {
-                e.stopPropagation();
-                if (!isVoting) onDownvote(song.id);
+              onClick={() => {
+                if (!isVoting) onDownvote(song.id, isMusician ? difficulty : null);
               }}
               disabled={isVoting}
               onMouseOver={(e) => {
                 if (!isVoting) {
                   e.target.style.background = 'linear-gradient(to right, #dc2626, #b91c1c)';
+                  e.target.style.transform = 'scale(1.02)';
                 }
               }}
               onMouseOut={(e) => {
                 if (!isVoting) {
                   e.target.style.background = 'linear-gradient(to right, #ef4444, #dc2626)';
+                  e.target.style.transform = 'scale(1)';
                 }
               }}
             >
-              <ThumbsDown size={14} />
+              <ThumbsDown size={18} />
+              {isVoting ? 'Voting...' : 'Downvote'}
+            </button>
+
+            <button 
+              style={isVoting ? styles.votingButton : styles.upvoteButton}
+              onClick={() => {
+                if (!isVoting) onUpvote(song.id, isMusician ? difficulty : null);
+              }}
+              disabled={isVoting}
+              onMouseOver={(e) => {
+                if (!isVoting) {
+                  e.target.style.background = 'linear-gradient(to right, #059669, #047857)';
+                  e.target.style.transform = 'scale(1.02)';
+                }
+              }}
+              onMouseOut={(e) => {
+                if (!isVoting) {
+                  e.target.style.background = 'linear-gradient(to right, #10b981, #059669)';
+                  e.target.style.transform = 'scale(1)';
+                }
+              }}
+            >
+              <ThumbsUp size={18} />
+              {isVoting ? 'Voting...' : 'Upvote'}
             </button>
           </div>
-          {isVoting && (
-            <div style={{
-              fontSize: '11px',
-              color: '#6b7280',
-              textAlign: 'center'
-            }}>
-              Voting...
-            </div>
-          )}
         </div>
       </div>
-    </div>
+
+      <YouTubePlayerModal
+        videoId={song.youtubeVideoId}
+        title={`${song.title} - ${song.artist}`}
+        isOpen={showPlayer}
+        onClose={() => setShowPlayer(false)}
+      />
+    </>
   );
 };
 
@@ -719,6 +1001,7 @@ const ChoirSongAppStyled = () => {
   
   // App state
   const [activeTab, setActiveTab] = useState('suggest');
+  const [currentSongIndex, setCurrentSongIndex] = useState(0);
   const [newSong, setNewSong] = useState({
     title: '',
     artist: '',
@@ -754,6 +1037,13 @@ const ChoirSongAppStyled = () => {
       localStorage.setItem('rmc_active_tab', activeTab);
     }
   }, [activeTab]);
+
+  // Reset current song index when switching to vote tab or songs change
+  useEffect(() => {
+    if (activeTab === 'vote') {
+      setCurrentSongIndex(0);
+    }
+  }, [activeTab, pendingSongs]);
   
   // Song handlers - now using database
   const handleAddSong = async () => {
@@ -776,15 +1066,23 @@ const ChoirSongAppStyled = () => {
     }
   };
 
-  // Updated voting handlers
-  const handleUpvote = async (songId) => {
-    console.log('Upvoting song:', songId);
-    await upvoteForSong(songId);
+  // Updated voting handlers with difficulty
+  const handleUpvote = async (songId, difficulty = null) => {
+    console.log('Upvoting song:', songId, 'Difficulty:', difficulty);
+    await upvoteForSong(songId, difficulty);
+    setCurrentSongIndex(prev => prev + 1);
   };
 
-  const handleDownvote = async (songId) => {
-    console.log('Downvoting song:', songId);
-    await downvoteForSong(songId);
+  const handleDownvote = async (songId, difficulty = null) => {
+    console.log('Downvoting song:', songId, 'Difficulty:', difficulty);
+    await downvoteForSong(songId, difficulty);
+    setCurrentSongIndex(prev => prev + 1);
+  };
+
+  const handleSkip = async (songId) => {
+    console.log('Skipping song:', songId);
+    // Just move to next song without voting
+    setCurrentSongIndex(prev => prev + 1);
   };
 
   // YouTube search handlers
@@ -921,9 +1219,11 @@ const ChoirSongAppStyled = () => {
         {activeTab === 'vote' && (
           <VoteTab
             songs={pendingSongs}
+            currentSongIndex={currentSongIndex}
             user={user}
             handleUpvote={handleUpvote}
             handleDownvote={handleDownvote}
+            handleSkip={handleSkip}
             isVoting={isVoting}
             isLoading={songsLoading}
             styles={styles}
@@ -1001,7 +1301,7 @@ const ChoirSongAppStyled = () => {
   );
 };
 
-// SuggestTab Component
+// SuggestTab Component (unchanged)
 const SuggestTab = ({ 
   newSong, 
   setNewSong, 
@@ -1195,12 +1495,55 @@ const SuggestTab = ({
   );
 };
 
-// VoteTab Component - Updated for swipeable cards
-const VoteTab = ({ songs, user, handleUpvote, handleDownvote, isVoting, isLoading, styles }) => {
+// VoteTab Component - Single Song Display
+const VoteTab = ({ songs, currentSongIndex, user, handleUpvote, handleDownvote, handleSkip, isVoting, isLoading, styles }) => {
   if (isLoading) {
     return (
       <div style={styles.card}>
         <div style={styles.loading}>Loading songs...</div>
+      </div>
+    );
+  }
+
+  const remainingSongs = songs?.length - currentSongIndex || 0;
+  const currentSong = songs?.[currentSongIndex];
+
+  if (!Array.isArray(songs) || songs.length === 0) {
+    return (
+      <div style={styles.card}>
+        <h2 style={styles.sectionTitle}>
+          <Heart size={20} style={{ marginRight: '8px', color: '#ec4899' }} />
+          Vote for Songs
+        </h2>
+        <div style={styles.emptyState}>
+          <Music size={48} style={{ color: '#a5b4fc', marginBottom: '12px', opacity: 0.7 }} />
+          <p style={{ color: '#4f46e5', fontWeight: '500', marginBottom: '4px' }}>
+            No more songs to vote on!
+          </p>
+          <p style={{ color: '#818cf8', fontSize: '14px' }}>
+            You've voted on all available songs. New songs will appear here when suggested.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!currentSong) {
+    return (
+      <div style={styles.card}>
+        <h2 style={styles.sectionTitle}>
+          <Heart size={20} style={{ marginRight: '8px', color: '#ec4899' }} />
+          Vote for Songs
+        </h2>
+        <div style={styles.emptyState}>
+          <Heart size={48} style={{ color: '#a5b4fc', marginBottom: '12px', opacity: 0.7 }} />
+          <p style={{ color: '#4f46e5', fontWeight: '500', marginBottom: '4px' }}>
+            All done! 🎉
+          </p>
+          <p style={{ color: '#818cf8', fontSize: '14px' }}>
+            You've voted on all available songs. Check back later for new submissions!
+          </p>
+        </div>
       </div>
     );
   }
@@ -1212,51 +1555,32 @@ const VoteTab = ({ songs, user, handleUpvote, handleDownvote, isVoting, isLoadin
         Vote for Songs
       </h2>
       
-      {!Array.isArray(songs) || songs.length === 0 ? (
-        <div style={styles.emptyState}>
-          <Music size={48} style={{ color: '#a5b4fc', marginBottom: '12px', opacity: 0.7 }} />
-          <p style={{ color: '#4f46e5', fontWeight: '500', marginBottom: '4px' }}>
-            No more songs to vote on!
-          </p>
-          <p style={{ color: '#818cf8', fontSize: '14px' }}>
-            You've voted on all available songs. New songs will appear here when suggested.
-          </p>
-        </div>
-      ) : (
-        <div>
-          <div style={{
-            padding: '12px',
-            marginBottom: '16px',
-            background: 'linear-gradient(to right, #eef2ff, #dbeafe)',
-            borderRadius: '8px',
-            textAlign: 'center',
-            border: '1px solid #e0e7ff'
-          }}>
-            <p style={{ fontSize: '14px', color: '#4338ca', fontWeight: '500', marginBottom: '4px' }}>
-              💡 Swipe right to upvote, left to downvote
-            </p>
-            <p style={{ fontSize: '12px', color: '#6b7280' }}>
-              Or use the buttons below each song
-            </p>
-          </div>
-          {songs.map(song => (
-            <SwipeableSongCard 
-              key={song.id}
-              song={song}
-              onUpvote={handleUpvote}
-              onDownvote={handleDownvote}
-              isVoting={isVoting}
-              styles={styles}
-            />
-          ))}
-        </div>
-      )}
+      {/* Progress Indicator */}
+      <div style={styles.progressIndicator}>
+        <p style={styles.progressText}>
+          {remainingSongs} song{remainingSongs !== 1 ? 's' : ''} left to vote on
+        </p>
+      </div>
+
+      {/* Single Song Card */}
+      <SingleSongVoteCard
+        song={currentSong}
+        onUpvote={handleUpvote}
+        onDownvote={handleDownvote}
+        onSkip={handleSkip}
+        isVoting={isVoting}
+        isMusician={user?.is_musician || false}
+        styles={styles}
+      />
     </div>
   );
 };
 
-// RankingsTab Component - Updated to show upvote/downvote counts
+// RankingsTab Component - Table Format
 const RankingsTab = ({ songs, isLoading, styles }) => {
+  const [showPlayer, setShowPlayer] = useState(false);
+  const [selectedSong, setSelectedSong] = useState(null);
+
   if (isLoading) {
     return (
       <div style={styles.card}>
@@ -1265,152 +1589,176 @@ const RankingsTab = ({ songs, isLoading, styles }) => {
     );
   }
 
+  const handleRowClick = (song) => {
+    if (song.youtubeVideoId) {
+      setSelectedSong(song);
+      setShowPlayer(true);
+    }
+  };
+
+  // Sort by upvotes first, then by lowest difficulty (if available)
+  const sortedSongs = [...(songs || [])].sort((a, b) => {
+    // First sort by upvotes (descending)
+    if (b.upvotes !== a.upvotes) {
+      return (b.upvotes || 0) - (a.upvotes || 0);
+    }
+    
+    // If upvotes are equal, sort by difficulty (ascending - easier first)
+    const aDiff = a.averageDifficulty;
+    const bDiff = b.averageDifficulty;
+    
+    // If both have difficulty ratings
+    if (aDiff && bDiff) {
+      return aDiff - bDiff;
+    }
+    
+    // If only one has difficulty rating, prioritize the one with rating
+    if (aDiff && !bDiff) return -1;
+    if (!aDiff && bDiff) return 1;
+    
+    // If neither has difficulty rating, maintain current order
+    return 0;
+  });
+
   return (
-    <div style={styles.card}>
-      <h2 style={styles.sectionTitle}>
-        <BarChart3 size={20} style={{ marginRight: '8px', color: '#6366f1' }} />
-        Song Rankings
-      </h2>
-      
-      {!Array.isArray(songs) || songs.length === 0 ? (
-        <div style={styles.emptyState}>
-          <ListMusic size={48} style={{ color: '#a5b4fc', marginBottom: '12px', opacity: 0.7 }} />
-          <p style={{ color: '#4f46e5', fontWeight: '500', marginBottom: '4px' }}>
-            No songs have been suggested yet.
-          </p>
-          <p style={{ color: '#818cf8', fontSize: '14px' }}>
-            Go to the Suggest tab to add a song!
-          </p>
-        </div>
-      ) : (
-        <div>
-          {/* Detailed list */}
-          <div style={{ 
-            background: 'linear-gradient(to right, #eef2ff, #dbeafe)', 
-            borderRadius: '8px', 
-            padding: '16px', 
-            border: '1px solid #e0e7ff' 
-          }}>
-            <h3 style={{ 
-              fontSize: '14px', 
-              fontWeight: '600', 
-              marginBottom: '12px', 
-              color: '#4338ca',
-              display: 'flex',
-              alignItems: 'center'
-            }}>
-              <ListMusic size={16} style={{ marginRight: '4px' }} />
-              Song Rankings ({songs.length} total)
-            </h3>
-            <div style={{ maxHeight: '600px', overflowY: 'auto', paddingRight: '4px' }}>
-              {songs.map((song, index) => (
-                <div 
-                  key={song.id || index} 
-                  style={{
-                    background: 'white',
-                    padding: '16px',
-                    borderRadius: '8px',
-                    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-                    border: '1px solid #e0e7ff',
-                    transition: 'all 0.2s ease',
-                    marginBottom: '16px'
-                  }}
-                  onMouseOver={(e) => {
-                    e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.1)';
-                    e.currentTarget.style.transform = 'translateY(-2px)';
-                  }}
-                  onMouseOut={(e) => {
-                    e.currentTarget.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.1)';
-                    e.currentTarget.style.transform = 'translateY(0)';
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <div style={{ display: 'flex', alignItems: 'flex-start' }}>
+    <>
+      <div style={styles.card}>
+        <h2 style={styles.sectionTitle}>
+          <BarChart3 size={20} style={{ marginRight: '8px', color: '#6366f1' }} />
+          Song Rankings
+        </h2>
+        
+        {!Array.isArray(songs) || songs.length === 0 ? (
+          <div style={styles.emptyState}>
+            <ListMusic size={48} style={{ color: '#a5b4fc', marginBottom: '12px', opacity: 0.7 }} />
+            <p style={{ color: '#4f46e5', fontWeight: '500', marginBottom: '4px' }}>
+              No songs have been suggested yet.
+            </p>
+            <p style={{ color: '#818cf8', fontSize: '14px' }}>
+              Go to the Suggest tab to add a song!
+            </p>
+          </div>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={styles.table}>
+              <thead style={styles.tableHeader}>
+                <tr>
+                  <th style={styles.tableCellHeader}>Rank</th>
+                  <th style={styles.tableCellHeader}>Song Name</th>
+                  <th style={styles.tableCellHeader}>Artist</th>
+                  <th style={styles.tableCellHeader}>Upvotes</th>
+                  <th style={styles.tableCellHeader}>Downvotes</th>
+                  <th style={styles.tableCellHeader}>Difficulty</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sortedSongs.map((song, index) => (
+                  <tr 
+                    key={song.id || index}
+                    style={styles.tableRow}
+                    onClick={() => handleRowClick(song)}
+                    onMouseOver={(e) => {
+                      e.currentTarget.style.backgroundColor = '#f9fafb';
+                      if (song.youtubeVideoId) {
+                        e.currentTarget.style.cursor = 'pointer';
+                      }
+                    }}
+                    onMouseOut={(e) => {
+                      e.currentTarget.style.backgroundColor = 'white';
+                    }}
+                  >
+                    <td style={styles.tableCellCenter}>
                       <div style={{
                         fontWeight: 'bold',
-                        width: '32px',
-                        height: '32px',
+                        width: '24px',
+                        height: '24px',
                         borderRadius: '50%',
                         background: index < 3 ? '#fbbf24' : '#4f46e5',
                         color: 'white',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        fontSize: '14px',
-                        marginRight: '12px',
-                        flexShrink: 0,
-                        border: index < 3 ? '1px solid #f59e0b' : '1px solid #4338ca'
+                        fontSize: '12px',
+                        margin: '0 auto'
                       }}>
                         {index + 1}
                       </div>
-                      <div style={{ flex: 1 }}>
-                        <h4 style={{ fontWeight: '600', color: '#4338ca', marginBottom: '4px', fontSize: '16px' }}>
-                          {song.title || 'Untitled'}
-                        </h4>
-                        <p style={{ fontSize: '14px', color: '#4f46e5', marginBottom: '4px' }}>
-                          {song.artist || 'Unknown Artist'}
-                        </p>
-                        {song.youtubeTitle && (
-                          <p style={{ 
-                            fontSize: '12px', 
-                            color: '#f59e0b', 
-                            marginBottom: '4px',
-                            display: 'flex',
-                            alignItems: 'center'
-                          }}>
-                            <Play size={12} style={{ marginRight: '4px' }} />
-                            {song.youtubeTitle}
-                          </p>
-                        )}
-                        <p style={{ 
-                          fontSize: '12px', 
-                          color: '#818cf8', 
-                          display: 'flex', 
+                    </td>
+                    <td style={styles.tableCell}>
+                      <div style={{ fontWeight: '600', color: '#1f2937' }}>
+                        {song.title || 'Untitled'}
+                      </div>
+                      {song.youtubeVideoId && (
+                        <div style={{ fontSize: '12px', color: '#f59e0b', marginTop: '2px', display: 'flex', alignItems: 'center' }}>
+                          <Play size={10} style={{ marginRight: '4px' }} />
+                          Click to play
+                        </div>
+                      )}
+                    </td>
+                    <td style={styles.tableCell}>
+                      {song.artist || 'Unknown Artist'}
+                    </td>
+                    <td style={styles.tableCellCenter}>
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '4px',
+                        color: '#10b981',
+                        fontWeight: '600'
+                      }}>
+                        <ThumbsUp size={14} />
+                        {song.upvotes || 0}
+                      </div>
+                    </td>
+                    <td style={styles.tableCellCenter}>
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '4px',
+                        color: '#ef4444',
+                        fontWeight: '600'
+                      }}>
+                        <ThumbsDown size={14} />
+                        {song.downvotes || 0}
+                      </div>
+                    </td>
+                    <td style={styles.tableCellCenter}>
+                      {song.averageDifficulty ? (
+                        <div style={{
+                          display: 'flex',
                           alignItems: 'center',
-                          marginBottom: '0'
+                          justifyContent: 'center',
+                          gap: '4px',
+                          color: '#f59e0b',
+                          fontWeight: '600'
                         }}>
-                          <Mic size={12} style={{ marginRight: '4px' }} />
-                          Suggested by: {song.suggestedBy || 'Unknown'}
-                        </p>
-                      </div>
-                    </div>
-                    <div style={styles.voteCountDisplay}>
-                      <div style={styles.voteCountBadge}>
-                        <Star size={14} style={{ marginRight: '4px', color: '#fbbf24' }} />
-                        {song.netVotes || 0} net
-                      </div>
-                      <div style={styles.voteBreakdown}>
-                        <div style={styles.upvoteCount}>
-                          <ThumbsUp size={12} />
-                          {song.upvotes || 0}
+                          <Star size={14} />
+                          {song.averageDifficulty.toFixed(1)}
                         </div>
-                        <div style={styles.downvoteCount}>
-                          <ThumbsDown size={12} />
-                          {song.downvotes || 0}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  {song.notes && (
-                    <div style={{
-                      marginTop: '12px',
-                      fontSize: '14px',
-                      color: '#6b7280',
-                      borderTop: '1px solid #e0e7ff',
-                      paddingTop: '8px',
-                      fontStyle: 'italic'
-                    }}>
-                      {song.notes}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
+                      ) : (
+                        <span style={{ color: '#9ca3af', fontSize: '12px' }}>NR</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-        </div>
-      )}
-    </div>
+        )}
+      </div>
+
+      <YouTubePlayerModal
+        videoId={selectedSong?.youtubeVideoId}
+        title={selectedSong ? `${selectedSong.title} - ${selectedSong.artist}` : ''}
+        isOpen={showPlayer}
+        onClose={() => {
+          setShowPlayer(false);
+          setSelectedSong(null);
+        }}
+      />
+    </>
   );
 };
 
