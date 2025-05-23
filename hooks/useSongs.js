@@ -1,5 +1,7 @@
+// Updated hooks/useSongs.js 
+
 import { useState, useEffect, useCallback } from 'react';
-import { fetchAllSongs, addSong, fetchVotesForSong } from '../lib/supabase';
+import { fetchAllSongs, addSong, fetchVotesForSong, fetchPendingVotesForUser } from '../lib/supabase';
 import { getYouTubeEmbedUrl, getYouTubeThumbnail, isValidYouTubeVideoId } from '../lib/youtube-api';
 import { supabaseClient } from '../lib/supabase';
 
@@ -8,60 +10,30 @@ import { supabaseClient } from '../lib/supabase';
  */
 export function useSongs(user) {
   const [songs, setSongs] = useState([]);
+  const [pendingSongs, setPendingSongs] = useState([]); // Songs for vote tab
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   
-  // Helper function to safely ensure votes is an array
-  const ensureArray = (data) => {
-    if (Array.isArray(data)) return data;
-    if (data === null || data === undefined) return [];
-    // If it's an object with a length property, try to convert
-    if (typeof data === 'object' && typeof data.length === 'number') {
-      try {
-        return Array.from(data);
-      } catch (e) {
-        console.warn('Failed to convert data to array:', data);
-        return [];
-      }
-    }
-    console.warn('Unexpected votes data type:', typeof data, data);
-    return [];
-  };
-  
-  // Load songs function - defined as useCallback so it can be used in dependencies
-  const loadSongs = useCallback(async () => {
+  // Load all songs (for rankings tab)
+  const loadAllSongs = useCallback(async () => {
     if (!user) return;
     
     setIsLoading(true);
     setError(null);
     
     try {
-      console.log('Loading songs for user:', user.id);
       const songsData = await fetchAllSongs();
-      console.log('Raw songs data from database:', songsData);
       
-      if (!Array.isArray(songsData)) {
-        console.warn('Songs data is not an array:', songsData);
-        setSongs([]);
-        return;
-      }
-
-      // Process each song with better error handling
+      // Get vote counts for each song
       const songsWithVotes = await Promise.all(
-        songsData.map(async (song, index) => {
+        songsData.map(async (song) => {
           try {
-            console.log(`Processing song ${index + 1}/${songsData.length}: ${song.title} (ID: ${song.id})`);
+            const votes = await fetchVotesForSong(song.id);
             
-            // Fetch votes with error handling
-            let votes = [];
-            try {
-              const votesData = await fetchVotesForSong(song.id);
-              votes = ensureArray(votesData);
-              console.log(`Votes for song ${song.id}:`, votes);
-            } catch (voteError) {
-              console.error(`Error fetching votes for song ${song.id}:`, voteError);
-              votes = [];
-            }
+            // Count upvotes and downvotes separately
+            const upvotes = votes.filter(vote => vote.vote_type === 'up').length;
+            const downvotes = votes.filter(vote => vote.vote_type === 'down').length;
+            const netVotes = upvotes - downvotes;
             
             // Validate YouTube video ID
             let youtubeUrl = '';
@@ -74,80 +46,116 @@ export function useSongs(user) {
               console.warn(`Invalid YouTube ID found in song "${song.title}": ${song.youtube_video_id}`);
             }
             
-            // Safely get suggester name
-            let suggestedBy = 'Anonymous';
-            if (song.suggesterName) {
-              suggestedBy = song.suggesterName;
-            } else if (song.users?.name) {
-              suggestedBy = song.users.name;
-            }
-            
-            // Create the song object with safe data access
-            const processedSong = {
+            // Format the song data
+            return {
               id: song.id,
-              title: song.title || 'Untitled',
-              artist: song.artist || 'Unknown Artist',
-              notes: song.notes || '',
+              title: song.title,
+              artist: song.artist,
+              notes: song.notes,
               youtubeUrl: youtubeUrl,
               youtubeThumb: youtubeThumb,
-              youtubeTitle: song.youtube_title || '',
+              youtubeTitle: song.youtube_title,
               youtubeVideoId: isValidYouTubeVideoId(song.youtube_video_id) ? song.youtube_video_id : null,
-              suggestedBy: suggestedBy,
+              suggestedBy: song.suggesterName || 'Anonymous',
               suggestedById: song.suggested_by,
-              votes: votes.length,
-              voters: votes.map(vote => vote.user_id || vote.userId).filter(Boolean),
-              votedByCurrentUser: votes.some(vote => (vote.user_id || vote.userId) === user.id),
-              createdAt: song.created_at || new Date().toISOString()
+              upvotes: upvotes,
+              downvotes: downvotes,
+              netVotes: netVotes,
+              totalVotes: upvotes + downvotes,
+              votes: netVotes, // For backward compatibility with ranking display
+              createdAt: song.created_at
             };
-            
-            console.log(`Successfully processed song: ${processedSong.title}`, processedSong);
-            return processedSong;
-            
           } catch (err) {
             console.error(`Error processing song ${song.id}:`, err);
-            console.error('Song data that caused error:', song);
-            
             // Return a minimal valid song object if there was an error
             return {
-              id: song.id || `error-${Date.now()}-${Math.random()}`,
-              title: song.title || 'Error Loading Song',
+              id: song.id,
+              title: song.title || 'Unknown Song',
               artist: song.artist || 'Unknown Artist',
               notes: song.notes || '',
               youtubeUrl: '',
               youtubeThumb: '',
               youtubeTitle: '',
               youtubeVideoId: null,
-              suggestedBy: 'Unknown',
+              suggestedBy: song.suggesterName || 'Anonymous',
               suggestedById: song.suggested_by,
+              upvotes: 0,
+              downvotes: 0,
+              netVotes: 0,
+              totalVotes: 0,
               votes: 0,
-              voters: [],
-              votedByCurrentUser: false,
               createdAt: song.created_at || new Date().toISOString()
             };
           }
         })
       );
       
-      console.log('Final processed songs:', songsWithVotes);
       setSongs(songsWithVotes);
-      
     } catch (err) {
-      console.error('Error loading songs:', err);
+      console.error('Error loading all songs:', err);
       setError('Failed to load songs. Please try again.');
-      setSongs([]); // Set empty array on error
     } finally {
       setIsLoading(false);
     }
   }, [user]);
+
+  // Load pending songs (for vote tab)
+  const loadPendingSongs = useCallback(async () => {
+    if (!user) return;
+    
+    try {
+      console.log('Loading pending songs for vote tab');
+      const pendingVotesData = await fetchPendingVotesForUser(user.id);
+      
+      // Transform the data structure
+      const pendingSongsFormatted = pendingVotesData.map(voteRecord => {
+        const song = voteRecord.songs;
+        
+        // Validate YouTube video ID
+        let youtubeUrl = '';
+        let youtubeThumb = '';
+        
+        if (song.youtube_video_id && isValidYouTubeVideoId(song.youtube_video_id)) {
+          youtubeUrl = getYouTubeEmbedUrl(song.youtube_video_id);
+          youtubeThumb = getYouTubeThumbnail(song.youtube_video_id);
+        }
+        
+        return {
+          id: song.id,
+          title: song.title,
+          artist: song.artist,
+          notes: song.notes,
+          youtubeUrl: youtubeUrl,
+          youtubeThumb: youtubeThumb,
+          youtubeTitle: song.youtube_title,
+          youtubeVideoId: isValidYouTubeVideoId(song.youtube_video_id) ? song.youtube_video_id : null,
+          suggestedBy: song.users?.name || 'Anonymous',
+          suggestedById: song.suggested_by,
+          voteStatus: 'pending', // All these songs are pending for this user
+          createdAt: song.created_at
+        };
+      });
+      
+      console.log(`Loaded ${pendingSongsFormatted.length} pending songs for vote tab`);
+      setPendingSongs(pendingSongsFormatted);
+    } catch (err) {
+      console.error('Error loading pending songs:', err);
+      setError('Failed to load songs for voting. Please try again.');
+    }
+  }, [user]);
+  
+  // Load both all songs and pending songs
+  const loadSongs = useCallback(async () => {
+    await Promise.all([
+      loadAllSongs(),
+      loadPendingSongs()
+    ]);
+  }, [loadAllSongs, loadPendingSongs]);
   
   // Load songs on mount and when user changes
   useEffect(() => {
     if (user) {
-      console.log('User changed, loading songs for:', user);
       loadSongs();
-    } else {
-      console.log('No user, clearing songs');
-      setSongs([]);
     }
   }, [user, loadSongs]);
   
@@ -155,7 +163,7 @@ export function useSongs(user) {
   useEffect(() => {
     if (!user) return;
     
-    console.log('Setting up Supabase realtime subscriptions for user:', user.id);
+    console.log('Setting up Supabase realtime subscriptions');
     
     // Subscribe to realtime changes
     const songsSubscription = supabaseClient
@@ -163,9 +171,8 @@ export function useSongs(user) {
       .on('postgres_changes', 
         { event: '*', schema: 'public', table: 'songs' }, 
         payload => {
-          console.log('Supabase songs update received:', payload);
-          // Debounce the reload to avoid excessive calls
-          setTimeout(() => loadSongs(), 1000);
+          console.log('Supabase songs update:', payload);
+          loadSongs();
         }
       )
       .subscribe();
@@ -175,9 +182,8 @@ export function useSongs(user) {
       .on('postgres_changes', 
         { event: '*', schema: 'public', table: 'votes' }, 
         payload => {
-          console.log('Supabase votes update received:', payload);
-          // Debounce the reload to avoid excessive calls
-          setTimeout(() => loadSongs(), 1000);
+          console.log('Supabase votes update:', payload);
+          loadSongs();
         }
       )
       .subscribe();
@@ -185,12 +191,8 @@ export function useSongs(user) {
     // Cleanup subscriptions
     return () => {
       console.log('Cleaning up Supabase subscriptions');
-      try {
-        supabaseClient.removeChannel(songsSubscription);
-        supabaseClient.removeChannel(votesSubscription);
-      } catch (err) {
-        console.warn('Error cleaning up subscriptions:', err);
-      }
+      supabaseClient.removeChannel(songsSubscription);
+      supabaseClient.removeChannel(votesSubscription);
     };
   }, [user, loadSongs]);
   
@@ -198,81 +200,57 @@ export function useSongs(user) {
   const addNewSong = async (songData) => {
     if (!user) {
       setError('You must be logged in to add a song');
-      return false;
+      return null;
     }
     
     try {
-      console.log('Adding new song:', songData);
-      
-      // Validate required fields
-      if (!songData.title || !songData.artist) {
-        setError('Title and artist are required');
-        return false;
-      }
-      
       // Validate YouTube video ID if present
       if (songData.youtubeVideoId && !isValidYouTubeVideoId(songData.youtubeVideoId)) {
         setError('Invalid YouTube video ID');
-        return false;
+        return null;
       }
       
-      const newSongData = {
-        title: songData.title.trim(),
-        artist: songData.artist.trim(),
-        notes: songData.notes ? songData.notes.trim() : null,
-        youtube_video_id: songData.youtubeVideoId || null,
-        youtube_title: songData.youtubeTitle || null,
+      const newSong = await addSong({
+        title: songData.title,
+        artist: songData.artist,
+        notes: songData.notes,
+        youtube_video_id: songData.youtubeVideoId,
+        youtube_title: songData.youtubeTitle,
         suggested_by: user.id
-      };
+      });
       
-      console.log('Sending song data to database:', newSongData);
-      const newSong = await addSong(newSongData);
-      console.log('Song added successfully:', newSong);
-      
-      // Reload songs to ensure UI is updated
+      // Force reload songs to ensure UI is updated
       await loadSongs();
       
-      return true;
+      return newSong;
     } catch (err) {
       console.error('Error adding song:', err);
-      setError(`Failed to add song: ${err.message || 'Unknown error'}`);
-      return false;
+      setError('Failed to add song. Please try again.');
+      return null;
     }
   };
   
-  // Get songs that the current user hasn't voted on yet
+  // Get songs for vote tab (only pending songs)
   const getSongsToVote = () => {
-    if (!user || !Array.isArray(songs)) return [];
+    if (!user) return [];
     
-    console.log('Getting songs to vote for user:', user.id);
-    console.log('Total songs:', songs.length);
-    
-    const nonVotedSongs = songs.filter(song => {
-      const hasVoted = song.votedByCurrentUser || 
-                       (Array.isArray(song.voters) && song.voters.includes(user.id));
-                       
-      console.log(`Song "${song.title}" - hasVoted: ${hasVoted}, votedByCurrentUser: ${song.votedByCurrentUser}, voters: [${song.voters}]`);
-      
-      return !hasVoted;
-    });
-    
-    console.log('Songs available for voting:', nonVotedSongs.length);
-    return nonVotedSongs;
+    console.log(`Songs available for voting: ${pendingSongs.length} pending songs`);
+    return pendingSongs;
   };
   
-  // Get songs sorted by votes
+  // Get songs sorted by net votes (for rankings)
   const getSortedSongs = () => {
-    if (!Array.isArray(songs)) return [];
-    return [...songs].sort((a, b) => (b.votes || 0) - (a.votes || 0));
+    return [...songs].sort((a, b) => b.netVotes - a.netVotes);
   };
   
   return {
-    songs: Array.isArray(songs) ? songs : [],
+    songs,              // All songs with vote counts (for rankings tab)
+    pendingSongs,       // Songs pending user vote (for vote tab)
     isLoading,
     error,
     addNewSong,
-    getSongsToVote,
-    getSortedSongs,
-    loadSongs  // Export loadSongs so it can be called from outside
+    getSongsToVote,     // Returns pendingSongs
+    getSortedSongs,     // Returns songs sorted by net votes
+    loadSongs           // Export loadSongs so it can be called from outside
   };
 }

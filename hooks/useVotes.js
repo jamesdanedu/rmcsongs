@@ -1,130 +1,68 @@
+// Updated hooks/useVotes.js 
+
 import { useState } from 'react';
 import { addVote } from '../lib/supabase';
 
 /**
- * Custom hook for handling song votes
+ * Custom hook for handling song votes (upvotes and downvotes)
  */
 export function useVotes(user) {
   const [isVoting, setIsVoting] = useState(false);
   const [error, setError] = useState(null);
-  const [votingStates, setVotingStates] = useState({}); // Track voting state per song
   
-  // Function to vote for a song
-  const voteForSong = async (songId) => {
+  // Function to vote for a song with specific vote type
+  const voteForSong = async (songId, voteType = 'up') => {
     if (!user) {
       setError('You must be logged in to vote');
       return false;
     }
-    
-    if (!songId) {
-      setError('Invalid song ID');
-      return false;
-    }
-    
-    // Check if already voting for this song
-    if (votingStates[songId]) {
-      console.log(`Already voting for song ${songId}, skipping`);
+
+    // Validate voteType
+    if (voteType !== 'up' && voteType !== 'down') {
+      setError('Invalid vote type. Must be "up" or "down"');
       return false;
     }
     
     setIsVoting(true);
-    setVotingStates(prev => ({ ...prev, [songId]: true }));
     setError(null);
     
     try {
-      console.log(`Attempting to vote for song ID: ${songId}, User ID: ${user.id}`);
+      console.log(`Voting "${voteType}" for song ID: ${songId}, User ID: ${user.id}`);
       
-      // Validate inputs
-      if (typeof songId !== 'string' || songId.trim() === '') {
-        throw new Error('Invalid song ID provided');
-      }
+      // Call updated addVote function with vote type
+      await addVote(songId, user.id, voteType);
       
-      if (!user.id || typeof user.id !== 'string') {
-        throw new Error('Invalid user ID');
-      }
-      
-      // Add vote to database with retry mechanism
-      let retries = 3;
-      let success = false;
-      let lastError = null;
-      
-      while (retries > 0 && !success) {
-        try {
-          console.log(`Vote attempt ${4-retries}/3 for song ${songId}`);
-          
-          const voteResult = await addVote(songId, user.id);
-          console.log('Vote result:', voteResult);
-          
-          success = true;
-          console.log('Vote successfully added');
-          
-        } catch (err) {
-          lastError = err;
-          console.error(`Attempt ${4-retries}/3 failed. Error voting for song:`, err);
-          
-          // Check if error is due to unique constraint (already voted)
-          if (err.code === '23505' || err.message?.includes('duplicate') || err.message?.includes('unique')) {
-            console.log('User has already voted for this song (unique constraint)');
-            // This is actually a "success" - the user's vote is recorded
-            success = true;
-            break;
-          }
-          
-          // Check for other specific errors that shouldn't be retried
-          if (err.message?.includes('Invalid') || err.code === '22P02') {
-            console.error('Non-retryable error:', err);
-            break;
-          }
-          
-          retries--;
-          if (retries > 0) {
-            console.log(`Retrying in 500ms... (${retries} attempts remaining)`);
-            await new Promise(r => setTimeout(r, 500)); // Wait before retrying
-          }
-        }
-      }
-      
-      if (!success && lastError) {
-        throw lastError;
-      }
-      
-      console.log(`Vote operation completed successfully for song ${songId}`);
-      return true;
-      
-    } catch (err) {
-      console.error('Final error voting for song:', err);
-      
-      // Handle specific error types
-      if (err.code === '23505' || err.message?.includes('duplicate') || err.message?.includes('unique')) {
-        console.warn('User has already voted for this song:', err);
-        setError('You have already voted for this song');
-        return true; // Consider this a "success" for UX purposes
-      } else if (err.message?.includes('Invalid') || err.message?.includes('not found')) {
-        setError('Unable to find this song. Please refresh and try again.');
-        return false;
-      } else if (err.message?.includes('network') || err.message?.includes('fetch')) {
-        setError('Network error. Please check your connection and try again.');
-        return false;
-      } else {
-        setError(`Failed to register vote: ${err.message || 'Unknown error'}`);
-        return false;
-      }
-    } finally {
+      console.log(`${voteType === 'up' ? 'Upvote' : 'Downvote'} successfully recorded`);
       setIsVoting(false);
-      setVotingStates(prev => {
-        const newState = { ...prev };
-        delete newState[songId];
-        return newState;
-      });
+      return true;
+    } catch (err) {
+      console.error('Error voting for song:', err);
+      
+      // Handle specific error cases
+      if (err.message?.includes('No pending vote found')) {
+        setError('You have already voted on this song or it is not available for voting');
+      } else if (err.code === '23505') {
+        // Unique constraint violation - shouldn't happen with new system but handle gracefully
+        setError('You have already voted on this song');
+      } else {
+        setError(`Failed to register ${voteType === 'up' ? 'upvote' : 'downvote'}. Please try again.`);
+      }
+      
+      setIsVoting(false);
+      return false;
     }
   };
-  
-  // Function to check if currently voting for a specific song
-  const isVotingForSong = (songId) => {
-    return Boolean(votingStates[songId]);
+
+  // Convenience functions for specific vote types
+  const upvoteForSong = async (songId) => {
+    return await voteForSong(songId, 'up');
   };
-  
-  // Function to clear any error
+
+  const downvoteForSong = async (songId) => {
+    return await voteForSong(songId, 'down');
+  };
+
+  // Clear any existing errors
   const clearError = () => {
     setError(null);
   };
@@ -132,8 +70,9 @@ export function useVotes(user) {
   return {
     isVoting,
     error,
-    voteForSong,
-    isVotingForSong,
+    voteForSong,      // Generic function: voteForSong(songId, 'up'/'down')
+    upvoteForSong,    // Convenience: upvoteForSong(songId)
+    downvoteForSong,  // Convenience: downvoteForSong(songId)
     clearError
   };
 }
