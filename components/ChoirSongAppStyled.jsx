@@ -1375,7 +1375,7 @@ const SuggestTab = ({
   };
   
   const recentSuggestions = getRecentSuggestionsCount();
-  const remainingSuggestions = Math.max(0, 5 - recentSuggestions);
+  const remainingSuggestions = Math.max(0, 3 - recentSuggestions);
   const canSuggest = remainingSuggestions > 0;
   
   return (
@@ -1411,8 +1411,8 @@ const SuggestTab = ({
           color: canSuggest ? '#6b7280' : '#991b1b'
         }}>
           {canSuggest 
-            ? 'You can suggest up to 5 songs every 30 days'
-            : 'You\'ve reached your limit of 5 suggestions per 30 days. Try again later!'
+            ? 'You can suggest up to 3 songs every 30 days'
+            : 'You\'ve reached your limit of 3 suggestions per 30 days. Try again later!'
           }
         </p>
       </div>
