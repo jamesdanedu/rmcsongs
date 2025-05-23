@@ -1,4 +1,4 @@
-// Updated hooks/useSongs.js 
+// Integrated hooks/useSongs.js with 3-suggestion limit
 
 import { useState, useEffect, useCallback } from 'react';
 import { fetchAllSongs, addSong, fetchVotesForSong, fetchPendingVotesForUser } from '../lib/supabase';
@@ -14,6 +14,69 @@ export function useSongs(user) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   
+  // New state for suggestion limit feature
+  const [userSuggestionCount, setUserSuggestionCount] = useState(0);
+  const [canSuggestMore, setCanSuggestMore] = useState(true);
+  const [nextSuggestionDate, setNextSuggestionDate] = useState(null);
+  
+  // Maximum number of suggestions allowed in 30 days
+  const MAX_SUGGESTIONS_PER_MONTH = 3;
+  
+  // Check if a user can suggest more songs and when they can next suggest
+  const checkSuggestionLimit = useCallback(async () => {
+    if (!user) return { canSuggest: false };
+    
+    try {
+      // Get the date 30 days ago
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      
+      // Query for songs suggested by this user in the last 30 days
+      const { data, error } = await supabaseClient
+        .from('songs')
+        .select('id, created_at')
+        .eq('suggested_by', user.id)
+        .gte('created_at', thirtyDaysAgo.toISOString())
+        .order('created_at', { ascending: true });
+      
+      if (error) throw error;
+      
+      const recentSuggestions = data || [];
+      const count = recentSuggestions.length;
+      
+      setUserSuggestionCount(count);
+      
+      // If user has reached the limit, calculate when they can suggest again
+      if (count >= MAX_SUGGESTIONS_PER_MONTH && recentSuggestions.length > 0) {
+        // The oldest suggestion's date + 30 days = when they can suggest again
+        const oldestSuggestion = new Date(recentSuggestions[0].created_at);
+        const nextAvailable = new Date(oldestSuggestion);
+        nextAvailable.setDate(nextAvailable.getDate() + 30);
+        
+        setNextSuggestionDate(nextAvailable);
+        setCanSuggestMore(false);
+        
+        return { 
+          canSuggest: false, 
+          nextDate: nextAvailable, 
+          suggestionsRemaining: 0 
+        };
+      } else {
+        setNextSuggestionDate(null);
+        setCanSuggestMore(true);
+        
+        return { 
+          canSuggest: true, 
+          nextDate: null, 
+          suggestionsRemaining: MAX_SUGGESTIONS_PER_MONTH - count 
+        };
+      }
+    } catch (err) {
+      console.error('Error checking suggestion limit:', err);
+      return { canSuggest: true }; // Allow by default if check fails
+    }
+  }, [user]);
+  
   // Load all songs (for rankings tab)
   const loadAllSongs = useCallback(async () => {
     if (!user) return;
@@ -22,6 +85,9 @@ export function useSongs(user) {
     setError(null);
     
     try {
+      // Check suggestion limit whenever songs are loaded
+      await checkSuggestionLimit();
+      
       const songsData = await fetchAllSongs();
       
       // Get vote counts for each song
@@ -97,7 +163,7 @@ export function useSongs(user) {
     } finally {
       setIsLoading(false);
     }
-  }, [user]);
+  }, [user, checkSuggestionLimit]);
 
   // Load pending songs (for vote tab)
   const loadPendingSongs = useCallback(async () => {
@@ -203,6 +269,20 @@ export function useSongs(user) {
       return null;
     }
     
+    // Check if the user can suggest more songs
+    const { canSuggest, nextDate, suggestionsRemaining } = await checkSuggestionLimit();
+    
+    if (!canSuggest) {
+      const formattedDate = nextDate.toLocaleDateString('en-US', { 
+        weekday: 'long',
+        month: 'long', 
+        day: 'numeric' 
+      });
+      
+      setError(`You've reached your limit of ${MAX_SUGGESTIONS_PER_MONTH} song suggestions in a 30-day period. You can suggest another song on ${formattedDate}.`);
+      return null;
+    }
+    
     try {
       // Validate YouTube video ID if present
       if (songData.youtubeVideoId && !isValidYouTubeVideoId(songData.youtubeVideoId)) {
@@ -221,6 +301,9 @@ export function useSongs(user) {
       
       // Force reload songs to ensure UI is updated
       await loadSongs();
+      
+      // After adding, refresh the suggestion count
+      await checkSuggestionLimit();
       
       return newSong;
     } catch (err) {
@@ -251,6 +334,13 @@ export function useSongs(user) {
     addNewSong,
     getSongsToVote,     // Returns pendingSongs
     getSortedSongs,     // Returns songs sorted by net votes
-    loadSongs           // Export loadSongs so it can be called from outside
+    loadSongs,          // Export loadSongs so it can be called from outside
+    
+    // New exports for suggestion limit feature
+    canSuggestMore,
+    userSuggestionCount,
+    nextSuggestionDate,
+    suggestionsRemaining: MAX_SUGGESTIONS_PER_MONTH - userSuggestionCount,
+    maxSuggestionsPerMonth: MAX_SUGGESTIONS_PER_MONTH
   };
 }
