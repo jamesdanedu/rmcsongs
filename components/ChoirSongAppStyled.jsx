@@ -1343,7 +1343,9 @@ const ChoirSongAppStyled = () => {
   );
 };
 
-// SuggestTab Component with 30-day limit
+// Enhanced SuggestTab Component with Next Available Date 
+// This is only the SuggestTab component portion that needs to be updated
+
 const SuggestTab = ({ 
   newSong, 
   setNewSong, 
@@ -1362,21 +1364,63 @@ const SuggestTab = ({
   const isValid = newSong?.title?.trim() && newSong?.artist?.trim();
   
   // Calculate recent suggestions (last 30 days)
-  const getRecentSuggestionsCount = () => {
-    if (!user || !songs) return 0;
+  const getRecentSuggestionsInfo = () => {
+    if (!user || !songs) return { count: 0, nextDate: null };
     
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     
-    return songs.filter(song => {
+    // Get user's songs from the last 30 days
+    const userSongs = songs.filter(song => {
       const songDate = new Date(song.createdAt);
       return song.suggestedById === user.id && songDate >= thirtyDaysAgo;
-    }).length;
+    });
+    
+    // Sort them by date (oldest first)
+    userSongs.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+    
+    // If user has reached limit, calculate when they can suggest again
+    let nextDate = null;
+    if (userSongs.length >= 3 && userSongs[0]) {
+      const oldestSuggestion = new Date(userSongs[0].createdAt);
+      nextDate = new Date(oldestSuggestion);
+      nextDate.setDate(nextDate.getDate() + 30);
+    }
+    
+    return {
+      count: userSongs.length,
+      nextDate: nextDate
+    };
   };
   
-  const recentSuggestions = getRecentSuggestionsCount();
+  const { count: recentSuggestions, nextDate } = getRecentSuggestionsInfo();
   const remainingSuggestions = Math.max(0, 3 - recentSuggestions);
   const canSuggest = remainingSuggestions > 0;
+  
+  // Format the next suggestion date in a user-friendly way
+  const getFormattedNextDate = () => {
+    if (!nextDate) return null;
+    
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    // Check if it's today, tomorrow, or later
+    if (nextDate.toDateString() === today.toDateString()) {
+      return "later today";
+    } else if (nextDate.toDateString() === tomorrow.toDateString()) {
+      return "tomorrow";
+    } else {
+      // Format date as "Tuesday, May 28" or similar
+      return nextDate.toLocaleDateString('en-US', {
+        weekday: 'long',
+        month: 'long',
+        day: 'numeric'
+      });
+    }
+  };
+  
+  const formattedNextDate = getFormattedNextDate();
   
   return (
     <div style={styles.card}>
@@ -1385,7 +1429,7 @@ const SuggestTab = ({
         Suggest a New Song
       </h2>
       
-      {/* Suggestion Limit Info */}
+      {/* Enhanced Suggestion Limit Info */}
       <div style={{
         padding: '12px',
         marginBottom: '16px',
@@ -1395,26 +1439,46 @@ const SuggestTab = ({
         borderRadius: '8px',
         border: `1px solid ${canSuggest ? '#e0e7ff' : '#fecaca'}`
       }}>
-        <p style={{ 
-          fontSize: '14px', 
-          fontWeight: '600', 
-          color: canSuggest ? '#4338ca' : '#dc2626',
-          marginBottom: '4px'
-        }}>
-          {canSuggest 
-            ? `${remainingSuggestions} suggestion${remainingSuggestions !== 1 ? 's' : ''} remaining` 
-            : 'Suggestion limit reached'
-          }
-        </p>
-        <p style={{ 
-          fontSize: '12px', 
-          color: canSuggest ? '#6b7280' : '#991b1b'
-        }}>
-          {canSuggest 
-            ? 'You can suggest up to 3 songs every 30 days'
-            : 'You\'ve reached your limit of 3 suggestions per 30 days. Try again later!'
-          }
-        </p>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <p style={{ 
+              fontSize: '14px', 
+              fontWeight: '600', 
+              color: canSuggest ? '#4338ca' : '#dc2626',
+              marginBottom: '4px'
+            }}>
+              {canSuggest 
+                ? `${remainingSuggestions} suggestion${remainingSuggestions !== 1 ? 's' : ''} remaining` 
+                : 'Suggestion limit reached'
+              }
+            </p>
+            <p style={{ 
+              fontSize: '12px', 
+              color: canSuggest ? '#6b7280' : '#991b1b'
+            }}>
+              {canSuggest 
+                ? 'You can suggest up to 3 songs every 30 days'
+                : formattedNextDate 
+                  ? `You can suggest again on ${formattedNextDate}`
+                  : 'You\'ve reached your limit of 3 suggestions per 30 days'
+              }
+            </p>
+          </div>
+          <div style={{
+            width: '40px',
+            height: '40px',
+            borderRadius: '50%',
+            background: canSuggest ? '#4f46e5' : '#dc2626',
+            color: 'white',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontWeight: 'bold',
+            fontSize: '18px'
+          }}>
+            {remainingSuggestions}
+          </div>
+        </div>
       </div>
 
       {!canSuggest && (
@@ -1424,8 +1488,36 @@ const SuggestTab = ({
             Suggestion limit reached
           </p>
           <p style={{ color: '#991b1b', fontSize: '14px' }}>
-            You can suggest more songs after your 30-day window resets.
+            {formattedNextDate 
+              ? `You can suggest another song on ${formattedNextDate}.`
+              : 'You can suggest more songs after your 30-day window resets.'}
           </p>
+          {nextDate && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginTop: '16px',
+              background: '#fee2e2',
+              padding: '8px 16px',
+              borderRadius: '8px',
+              fontSize: '14px',
+              fontWeight: '500',
+              color: '#b91c1c'
+            }}>
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px' }}>
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                <line x1="16" y1="2" x2="16" y2="6"></line>
+                <line x1="8" y1="2" x2="8" y2="6"></line>
+                <line x1="3" y1="10" x2="21" y2="10"></line>
+              </svg>
+              {nextDate.toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric'
+              })}
+            </div>
+          )}
         </div>
       )}
 
@@ -1463,6 +1555,7 @@ const SuggestTab = ({
             />
           </div>
 
+          {/* Rest of the component remains the same... */}
           {/* YouTube Search Section */}
           <div style={styles.youtubeSearchContainer}>
             <label style={styles.label}>
@@ -1580,24 +1673,54 @@ const SuggestTab = ({
           
           <button
             onClick={handleAddSong}
-            disabled={!isValid || !canSuggest}
-            style={(isValid && canSuggest) ? styles.primaryButton : styles.disabledButton}
+            disabled={!isValid}
+            style={isValid ? styles.primaryButton : styles.disabledButton}
             onMouseOver={(e) => {
-              if (isValid && canSuggest) {
+              if (isValid) {
                 e.target.style.background = 'linear-gradient(to right, #4338ca, #1d4ed8)';
                 e.target.style.transform = 'translateY(-1px)';
               }
             }}
             onMouseOut={(e) => {
-              if (isValid && canSuggest) {
+              if (isValid) {
                 e.target.style.background = 'linear-gradient(to right, #4f46e5, #2563eb)';
                 e.target.style.transform = 'translateY(0)';
               }
             }}
           >
             <PlusCircle size={18} />
-            {canSuggest ? 'Submit Song' : 'Limit Reached'}
+            Submit Song
           </button>
+
+          {/* Suggestion Limit Progress */}
+          <div style={{
+            marginTop: '20px',
+            padding: '12px',
+            background: 'linear-gradient(to right, #f0f9ff, #e0f2fe)',
+            borderRadius: '8px',
+            border: '1px solid #bae6fd'
+          }}>
+            <p style={{ fontSize: '13px', color: '#0c4a6e', marginBottom: '8px', fontWeight: '500' }}>
+              Suggestion Limit
+            </p>
+            <div style={{ 
+              height: '8px', 
+              background: '#e0f2fe', 
+              borderRadius: '4px', 
+              overflow: 'hidden',
+              marginBottom: '8px'
+            }}>
+              <div style={{ 
+                width: `${(recentSuggestions / 3) * 100}%`, 
+                height: '100%', 
+                background: 'linear-gradient(to right, #0ea5e9, #0284c7)',
+                borderRadius: '4px'
+              }}></div>
+            </div>
+            <p style={{ fontSize: '12px', color: '#0369a1', textAlign: 'center' }}>
+              {recentSuggestions}/3 suggestions used in the past 30 days
+            </p>
+          </div>
         </>
       )}
     </div>
