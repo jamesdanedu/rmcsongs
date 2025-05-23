@@ -1450,14 +1450,14 @@ const SuggestTab = ({
           <div style={{ marginBottom: '16px' }}>
             <label style={styles.label}>
               <Mic size={16} style={{ marginRight: '4px', color: '#6366f1' }} />
-              Artist/Composer
+              Artist
             </label>
             <input
               type="text"
               style={styles.input}
               value={newSong?.artist || ''}
               onChange={(e) => setNewSong({...newSong, artist: e.target.value})}
-              placeholder="Enter artist or composer"
+              placeholder="Enter artist"
               onFocus={(e) => e.target.style.borderColor = '#4f46e5'}
               onBlur={(e) => e.target.style.borderColor = '#c7d2fe'}
             />
@@ -1467,7 +1467,7 @@ const SuggestTab = ({
           <div style={styles.youtubeSearchContainer}>
             <label style={styles.label}>
               <Play size={16} style={{ marginRight: '4px', color: '#6366f1' }} />
-              Search YouTube (Optional)
+              Link to YouTube Video 
             </label>
             <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
               <input
@@ -1475,7 +1475,7 @@ const SuggestTab = ({
                 style={{...styles.input, flex: 1}}
                 value={youtubeQuery}
                 onChange={(e) => setYoutubeQuery(e.target.value)}
-                placeholder="Auto-filled from title and artist"
+                placeholder="Auto-filled from above"
                 onKeyPress={(e) => e.key === 'Enter' && handleYouTubeSearch()}
               />
               <button
