@@ -737,10 +737,10 @@ const SingleSongVoteCard = ({ song, onUpvote, onDownvote, onSkip, isVoting, isMu
 
   const handleEnd = () => {
     if (isDragging && !isVoting) {
-      if (dragOffset > 50) {
+      if (dragOffset > 30) {  // Reduced from 50 to 30 for more sensitivity
         // Swipe right - upvote
         onUpvote(song.id, isMusician ? difficulty : null);
-      } else if (dragOffset < -50) {
+      } else if (dragOffset < -30) {  // Reduced from -50 to -30
         // Swipe left - downvote  
         onDownvote(song.id, isMusician ? difficulty : null);
       }
@@ -787,7 +787,7 @@ const SingleSongVoteCard = ({ song, onUpvote, onDownvote, onSkip, isVoting, isMu
   const cardStyle = {
     ...styles.singleSongCard,
     ...(isDragging ? styles.singleSongCardDragging : {}),
-    transform: `translateX(${dragOffset}px)`,
+    transform: `translateX(${dragOffset}px) rotate(${dragOffset * 0.1}deg)`,
     cursor: isVoting ? 'not-allowed' : (isDragging ? 'grabbing' : 'grab')
   };
 
@@ -814,26 +814,44 @@ const SingleSongVoteCard = ({ song, onUpvote, onDownvote, onSkip, isVoting, isMu
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
-        {/* Swipe Indicators */}
+        {/* Enhanced Swipe Instructions */}
+        <div style={{
+          position: 'absolute',
+          top: '12px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          background: 'rgba(0, 0, 0, 0.7)',
+          color: 'white',
+          padding: '6px 12px',
+          borderRadius: '12px',
+          fontSize: '12px',
+          zIndex: 3,
+          pointerEvents: 'none'
+        }}>
+          ← Swipe to vote →
+        </div>
+        {/* Enhanced Swipe Indicators - More Visible */}
         <div 
           style={{
             ...styles.swipeIndicator,
             ...styles.swipeIndicatorLeft,
-            opacity: leftIndicatorOpacity
+            opacity: leftIndicatorOpacity,
+            transform: `translateY(-50%) scale(${1 + leftIndicatorOpacity * 0.2})`
           }}
         >
-          <ThumbsDown size={20} />
-          <span>Downvote</span>
+          <ThumbsDown size={24} />
+          <span style={{ fontWeight: 'bold' }}>DOWNVOTE</span>
         </div>
         <div 
           style={{
             ...styles.swipeIndicator,
             ...styles.swipeIndicatorRight,
-            opacity: rightIndicatorOpacity
+            opacity: rightIndicatorOpacity,
+            transform: `translateY(-50%) scale(${1 + rightIndicatorOpacity * 0.2})`
           }}
         >
-          <ThumbsUp size={20} />
-          <span>Upvote</span>
+          <ThumbsUp size={24} />
+          <span style={{ fontWeight: 'bold' }}>UPVOTE</span>
         </div>
 
         {/* YouTube Thumbnail */}
@@ -1213,6 +1231,8 @@ const ChoirSongAppStyled = () => {
             handleYouTubeSearch={handleYouTubeSearch}
             handleSelectVideo={handleSelectVideo}
             styles={styles}
+            user={user}
+            songs={songs}
           />
         )}
         
@@ -1301,7 +1321,7 @@ const ChoirSongAppStyled = () => {
   );
 };
 
-// SuggestTab Component (unchanged)
+// SuggestTab Component with 30-day limit
 const SuggestTab = ({ 
   newSong, 
   setNewSong, 
@@ -1313,9 +1333,28 @@ const SuggestTab = ({
   searchingYouTube,
   handleYouTubeSearch,
   handleSelectVideo,
-  styles 
+  styles,
+  user,
+  songs 
 }) => {
   const isValid = newSong?.title?.trim() && newSong?.artist?.trim();
+  
+  // Calculate recent suggestions (last 30 days)
+  const getRecentSuggestionsCount = () => {
+    if (!user || !songs) return 0;
+    
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    
+    return songs.filter(song => {
+      const songDate = new Date(song.createdAt);
+      return song.suggestedById === user.id && songDate >= thirtyDaysAgo;
+    }).length;
+  };
+  
+  const recentSuggestions = getRecentSuggestionsCount();
+  const remainingSuggestions = Math.max(0, 5 - recentSuggestions);
+  const canSuggest = remainingSuggestions > 0;
   
   return (
     <div style={styles.card}>
@@ -1324,173 +1363,221 @@ const SuggestTab = ({
         Suggest a New Song
       </h2>
       
-      <div style={{ marginBottom: '16px' }}>
-        <label style={styles.label}>
-          <Music size={16} style={{ marginRight: '4px', color: '#6366f1' }} />
-          Song Title
-        </label>
-        <input
-          type="text"
-          style={styles.input}
-          value={newSong?.title || ''}
-          onChange={(e) => setNewSong({...newSong, title: e.target.value})}
-          placeholder="Enter song title"
-          onFocus={(e) => e.target.style.borderColor = '#4f46e5'}
-          onBlur={(e) => e.target.style.borderColor = '#c7d2fe'}
-        />
-      </div>
-      
-      <div style={{ marginBottom: '16px' }}>
-        <label style={styles.label}>
-          <Mic size={16} style={{ marginRight: '4px', color: '#6366f1' }} />
-          Artist/Composer
-        </label>
-        <input
-          type="text"
-          style={styles.input}
-          value={newSong?.artist || ''}
-          onChange={(e) => setNewSong({...newSong, artist: e.target.value})}
-          placeholder="Enter artist or composer"
-          onFocus={(e) => e.target.style.borderColor = '#4f46e5'}
-          onBlur={(e) => e.target.style.borderColor = '#c7d2fe'}
-        />
+      {/* Suggestion Limit Info */}
+      <div style={{
+        padding: '12px',
+        marginBottom: '16px',
+        background: canSuggest 
+          ? 'linear-gradient(to right, #eef2ff, #dbeafe)' 
+          : 'linear-gradient(to right, #fef2f2, #fecaca)',
+        borderRadius: '8px',
+        border: `1px solid ${canSuggest ? '#e0e7ff' : '#fecaca'}`
+      }}>
+        <p style={{ 
+          fontSize: '14px', 
+          fontWeight: '600', 
+          color: canSuggest ? '#4338ca' : '#dc2626',
+          marginBottom: '4px'
+        }}>
+          {canSuggest 
+            ? `${remainingSuggestions} suggestion${remainingSuggestions !== 1 ? 's' : ''} remaining` 
+            : 'Suggestion limit reached'
+          }
+        </p>
+        <p style={{ 
+          fontSize: '12px', 
+          color: canSuggest ? '#6b7280' : '#991b1b'
+        }}>
+          {canSuggest 
+            ? 'You can suggest up to 5 songs every 30 days'
+            : 'You\'ve reached your limit of 5 suggestions per 30 days. Try again later!'
+          }
+        </p>
       </div>
 
-      {/* YouTube Search Section */}
-      <div style={styles.youtubeSearchContainer}>
-        <label style={styles.label}>
-          <Play size={16} style={{ marginRight: '4px', color: '#6366f1' }} />
-          Search YouTube (Optional)
-        </label>
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
-          <input
-            type="text"
-            style={{...styles.input, flex: 1}}
-            value={youtubeQuery}
-            onChange={(e) => setYoutubeQuery(e.target.value)}
-            placeholder="Auto-filled from title and artist"
-            onKeyPress={(e) => e.key === 'Enter' && handleYouTubeSearch()}
-          />
-          <button
-            onClick={handleYouTubeSearch}
-            disabled={searchingYouTube || !youtubeQuery.trim()}
-            style={styles.secondaryButton}
-          >
-            <Search size={16} />
-            {searchingYouTube ? 'Searching...' : 'Search'}
-          </button>
+      {!canSuggest && (
+        <div style={styles.emptyState}>
+          <PlusCircle size={48} style={{ color: '#fca5a5', marginBottom: '12px', opacity: 0.7 }} />
+          <p style={{ color: '#dc2626', fontWeight: '500', marginBottom: '4px' }}>
+            Suggestion limit reached
+          </p>
+          <p style={{ color: '#991b1b', fontSize: '14px' }}>
+            You can suggest more songs after your 30-day window resets.
+          </p>
         </div>
+      )}
 
-        {/* YouTube Results */}
-        {youtubeResults.length > 0 && (
-          <div style={{ marginTop: '12px' }}>
-            <p style={{ fontSize: '14px', fontWeight: '500', marginBottom: '8px', color: '#374151' }}>
-              Select a video:
-            </p>
-            {youtubeResults.map((video) => (
-              <div
-                key={video.id}
-                style={selectedVideo?.id === video.id ? styles.selectedYoutubeResult : styles.youtubeResult}
-                onClick={() => handleSelectVideo(video)}
-                onMouseOver={(e) => {
-                  if (selectedVideo?.id !== video.id) {
-                    e.currentTarget.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.1)';
-                  }
-                }}
-                onMouseOut={(e) => {
-                  if (selectedVideo?.id !== video.id) {
-                    e.currentTarget.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.1)';
-                  }
-                }}
+      {canSuggest && (
+        <>
+          <div style={{ marginBottom: '16px' }}>
+            <label style={styles.label}>
+              <Music size={16} style={{ marginRight: '4px', color: '#6366f1' }} />
+              Song Title
+            </label>
+            <input
+              type="text"
+              style={styles.input}
+              value={newSong?.title || ''}
+              onChange={(e) => setNewSong({...newSong, title: e.target.value})}
+              placeholder="Enter song title"
+              onFocus={(e) => e.target.style.borderColor = '#4f46e5'}
+              onBlur={(e) => e.target.style.borderColor = '#c7d2fe'}
+            />
+          </div>
+          
+          <div style={{ marginBottom: '16px' }}>
+            <label style={styles.label}>
+              <Mic size={16} style={{ marginRight: '4px', color: '#6366f1' }} />
+              Artist/Composer
+            </label>
+            <input
+              type="text"
+              style={styles.input}
+              value={newSong?.artist || ''}
+              onChange={(e) => setNewSong({...newSong, artist: e.target.value})}
+              placeholder="Enter artist or composer"
+              onFocus={(e) => e.target.style.borderColor = '#4f46e5'}
+              onBlur={(e) => e.target.style.borderColor = '#c7d2fe'}
+            />
+          </div>
+
+          {/* YouTube Search Section */}
+          <div style={styles.youtubeSearchContainer}>
+            <label style={styles.label}>
+              <Play size={16} style={{ marginRight: '4px', color: '#6366f1' }} />
+              Search YouTube (Optional)
+            </label>
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+              <input
+                type="text"
+                style={{...styles.input, flex: 1}}
+                value={youtubeQuery}
+                onChange={(e) => setYoutubeQuery(e.target.value)}
+                placeholder="Auto-filled from title and artist"
+                onKeyPress={(e) => e.key === 'Enter' && handleYouTubeSearch()}
+              />
+              <button
+                onClick={handleYouTubeSearch}
+                disabled={searchingYouTube || !youtubeQuery.trim()}
+                style={styles.secondaryButton}
               >
-                <img 
-                  src={video.thumbnails?.default?.url || '/api/placeholder/80/60'} 
-                  alt="Video thumbnail" 
-                  style={{ width: '80px', height: '60px', borderRadius: '4px', marginRight: '12px' }}
-                />
-                <div>
-                  <p style={{ fontWeight: '500', fontSize: '14px', marginBottom: '4px', color: '#374151' }}>
-                    {video.title}
-                  </p>
-                  <p style={{ fontSize: '12px', color: '#6b7280' }}>
-                    {video.channelTitle}
-                  </p>
-                </div>
-                {selectedVideo?.id === video.id && (
-                  <div style={{ marginLeft: 'auto' }}>
-                    <div style={{
-                      background: '#4f46e5',
-                      color: 'white',
-                      borderRadius: '50%',
-                      width: '20px',
-                      height: '20px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center'
-                    }}>
-                      ✓
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
+                <Search size={16} />
+                {searchingYouTube ? 'Searching...' : 'Search'}
+              </button>
+            </div>
 
-        {/* Selected Video Display */}
-        {selectedVideo && (
-          <div style={{ 
-            marginTop: '12px', 
-            padding: '12px', 
-            background: '#eef2ff', 
-            border: '1px solid #4f46e5', 
-            borderRadius: '8px' 
-          }}>
-            <p style={{ fontSize: '12px', color: '#4f46e5', marginBottom: '4px' }}>
-              ✓ Selected Video:
-            </p>
-            <p style={{ fontSize: '14px', fontWeight: '500', color: '#4338ca' }}>
-              {selectedVideo.title}
-            </p>
+            {/* YouTube Results */}
+            {youtubeResults.length > 0 && (
+              <div style={{ marginTop: '12px' }}>
+                <p style={{ fontSize: '14px', fontWeight: '500', marginBottom: '8px', color: '#374151' }}>
+                  Select a video:
+                </p>
+                {youtubeResults.map((video) => (
+                  <div
+                    key={video.id}
+                    style={selectedVideo?.id === video.id ? styles.selectedYoutubeResult : styles.youtubeResult}
+                    onClick={() => handleSelectVideo(video)}
+                    onMouseOver={(e) => {
+                      if (selectedVideo?.id !== video.id) {
+                        e.currentTarget.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.1)';
+                      }
+                    }}
+                    onMouseOut={(e) => {
+                      if (selectedVideo?.id !== video.id) {
+                        e.currentTarget.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.1)';
+                      }
+                    }}
+                  >
+                    <img 
+                      src={video.thumbnails?.default?.url || '/api/placeholder/80/60'} 
+                      alt="Video thumbnail" 
+                      style={{ width: '80px', height: '60px', borderRadius: '4px', marginRight: '12px' }}
+                    />
+                    <div>
+                      <p style={{ fontWeight: '500', fontSize: '14px', marginBottom: '4px', color: '#374151' }}>
+                        {video.title}
+                      </p>
+                      <p style={{ fontSize: '12px', color: '#6b7280' }}>
+                        {video.channelTitle}
+                      </p>
+                    </div>
+                    {selectedVideo?.id === video.id && (
+                      <div style={{ marginLeft: 'auto' }}>
+                        <div style={{
+                          background: '#4f46e5',
+                          color: 'white',
+                          borderRadius: '50%',
+                          width: '20px',
+                          height: '20px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}>
+                          ✓
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Selected Video Display */}
+            {selectedVideo && (
+              <div style={{ 
+                marginTop: '12px', 
+                padding: '12px', 
+                background: '#eef2ff', 
+                border: '1px solid #4f46e5', 
+                borderRadius: '8px' 
+              }}>
+                <p style={{ fontSize: '12px', color: '#4f46e5', marginBottom: '4px' }}>
+                  ✓ Selected Video:
+                </p>
+                <p style={{ fontSize: '14px', fontWeight: '500', color: '#4338ca' }}>
+                  {selectedVideo.title}
+                </p>
+              </div>
+            )}
           </div>
-        )}
-      </div>
-      
-      <div style={{ marginBottom: '16px' }}>
-        <label style={styles.label}>
-          <ListMusic size={16} style={{ marginRight: '4px', color: '#6366f1' }} />
-          Additional Notes (Optional)
-        </label>
-        <textarea
-          style={{...styles.input, minHeight: '80px', resize: 'vertical'}}
-          value={newSong?.notes || ''}
-          onChange={(e) => setNewSong({...newSong, notes: e.target.value})}
-          placeholder="Any additional information"
-          onFocus={(e) => e.target.style.borderColor = '#4f46e5'}
-          onBlur={(e) => e.target.style.borderColor = '#c7d2fe'}
-        />
-      </div>
-      
-      <button
-        onClick={handleAddSong}
-        disabled={!isValid}
-        style={isValid ? styles.primaryButton : styles.disabledButton}
-        onMouseOver={(e) => {
-          if (isValid) {
-            e.target.style.background = 'linear-gradient(to right, #4338ca, #1d4ed8)';
-            e.target.style.transform = 'translateY(-1px)';
-          }
-        }}
-        onMouseOut={(e) => {
-          if (isValid) {
-            e.target.style.background = 'linear-gradient(to right, #4f46e5, #2563eb)';
-            e.target.style.transform = 'translateY(0)';
-          }
-        }}
-      >
-        <PlusCircle size={18} />
-        Submit Song
-      </button>
+          
+          <div style={{ marginBottom: '16px' }}>
+            <label style={styles.label}>
+              <ListMusic size={16} style={{ marginRight: '4px', color: '#6366f1' }} />
+              Additional Notes (Optional)
+            </label>
+            <textarea
+              style={{...styles.input, minHeight: '80px', resize: 'vertical'}}
+              value={newSong?.notes || ''}
+              onChange={(e) => setNewSong({...newSong, notes: e.target.value})}
+              placeholder="Any additional information"
+              onFocus={(e) => e.target.style.borderColor = '#4f46e5'}
+              onBlur={(e) => e.target.style.borderColor = '#c7d2fe'}
+            />
+          </div>
+          
+          <button
+            onClick={handleAddSong}
+            disabled={!isValid || !canSuggest}
+            style={(isValid && canSuggest) ? styles.primaryButton : styles.disabledButton}
+            onMouseOver={(e) => {
+              if (isValid && canSuggest) {
+                e.target.style.background = 'linear-gradient(to right, #4338ca, #1d4ed8)';
+                e.target.style.transform = 'translateY(-1px)';
+              }
+            }}
+            onMouseOut={(e) => {
+              if (isValid && canSuggest) {
+                e.target.style.background = 'linear-gradient(to right, #4f46e5, #2563eb)';
+                e.target.style.transform = 'translateY(0)';
+              }
+            }}
+          >
+            <PlusCircle size={18} />
+            {canSuggest ? 'Submit Song' : 'Limit Reached'}
+          </button>
+        </>
+      )}
     </div>
   );
 };
