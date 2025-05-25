@@ -213,8 +213,8 @@ const styles = {
   },
 
   downvoteButton: {
-    padding: '16px 24px',
-    borderRadius: '50px',
+    padding: '12px 20px',
+    borderRadius: '40px',
     background: 'linear-gradient(to right, #ef4444, #dc2626)',
     color: 'white',
     border: 'none',
@@ -225,13 +225,13 @@ const styles = {
     alignItems: 'center',
     gap: '8px',
     transition: 'all 0.2s ease',
-    minWidth: '120px',
+    minWidth: '80px',
     justifyContent: 'center'
   },
 
   upvoteButton: {
-    padding: '16px 24px',
-    borderRadius: '50px',
+    padding: '12px 20px',
+    borderRadius: '40px',
     background: 'linear-gradient(to right, #10b981, #059669)',
     color: 'white',
     border: 'none',
@@ -242,7 +242,7 @@ const styles = {
     alignItems: 'center',
     gap: '8px',
     transition: 'all 0.2s ease',
-    minWidth: '120px',
+    minWidth: '80px',
     justifyContent: 'center'
   },
 
@@ -862,7 +862,7 @@ const SingleSongVoteCard = ({ song, onUpvote, onDownvote, onSkip, isVoting, isMu
           }}
         >
           <ThumbsDown size={24} />
-          <span style={{ fontWeight: 'bold' }}>DOWNVOTE</span>
+          <span style={{ fontWeight: 'bold' }}>NO WAY!</span>
         </div>
         <div 
           style={{
@@ -873,7 +873,7 @@ const SingleSongVoteCard = ({ song, onUpvote, onDownvote, onSkip, isVoting, isMu
           }}
         >
           <ThumbsUp size={24} />
-          <span style={{ fontWeight: 'bold' }}>UPVOTE</span>
+          <span style={{ fontWeight: 'bold' }}>YES, LOVE IT!</span>
         </div>
 
         {/* YouTube Thumbnail */}
