@@ -313,6 +313,9 @@ export function useSongs(user) {
     }
   };
   
+
+
+  
   // Get songs for vote tab (only pending songs)
   const getSongsToVote = () => {
     if (!user) return [];
