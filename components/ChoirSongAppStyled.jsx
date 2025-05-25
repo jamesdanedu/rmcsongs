@@ -13,7 +13,7 @@ const styles = {
   pageContainer: {
     minHeight: '100vh',
     background: 'linear-gradient(to bottom, #eef2ff, #ffffff, #eef2ff)',
-    paddingBottom: '100px'
+    paddingBottom: '80px'
   },
   
   maxWidthContainer: {
@@ -439,7 +439,7 @@ const styles = {
     bottom: 0,
     left: 0,
     right: 0,
-    height: '80px',
+    height: '66px',
     background: 'white',
     boxShadow: '0 -4px 6px -1px rgba(0, 0, 0, 0.1)',
     borderTop: '1px solid #e0e7ff',
@@ -456,7 +456,7 @@ const styles = {
 
   tab: {
     flex: 1,
-    padding: '8px 4px',
+    padding: '6px 4px',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
@@ -471,7 +471,7 @@ const styles = {
 
   activeTab: {
     flex: 1,
-    padding: '8px 4px',
+    padding: '6px 4px',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
@@ -759,10 +759,10 @@ const SingleSongVoteCard = ({ song, onUpvote, onDownvote, onSkip, isVoting, isMu
 
   const handleEnd = () => {
     if (isDragging && !isVoting) {
-      if (dragOffset > 30) {  // Reduced from 50 to 30 for more sensitivity
+      if (dragOffset > 40) {  
         // Swipe right - upvote
         onUpvote(song.id, isMusician ? difficulty : null);
-      } else if (dragOffset < -30) {  // Reduced from -50 to -30
+      } else if (dragOffset < -40) {  
         // Swipe left - downvote  
         onDownvote(song.id, isMusician ? difficulty : null);
       }
@@ -994,7 +994,7 @@ const SingleSongVoteCard = ({ song, onUpvote, onDownvote, onSkip, isVoting, isMu
               }}
             >
               <ThumbsDown size={18} />
-              {isVoting ? 'Voting...' : 'Downvote'}
+              {isVoting ? 'Voting...' : 'No'}
             </button>
 
             <button 
@@ -1017,7 +1017,7 @@ const SingleSongVoteCard = ({ song, onUpvote, onDownvote, onSkip, isVoting, isMu
               }}
             >
               <ThumbsUp size={18} />
-              {isVoting ? 'Voting...' : 'Upvote'}
+              {isVoting ? 'Voting...' : 'Yes'}
             </button>
           </div>
         </div>
@@ -1290,12 +1290,12 @@ const ChoirSongAppStyled = () => {
           >
             <div style={activeTab === 'suggest' ? {
               background: '#eef2ff',
-              padding: '8px',
+              padding: '6px',
               borderRadius: '50%',
               marginBottom: '4px'
             } : { marginBottom: '4px' }}>
               <PlusCircle 
-                size={20} 
+                size={18} 
                 color={activeTab === 'suggest' ? '#4f46e5' : '#6b7280'} 
               />
             </div>
@@ -1308,12 +1308,12 @@ const ChoirSongAppStyled = () => {
           >
             <div style={activeTab === 'vote' ? {
               background: '#eef2ff',
-              padding: '8px',
+              padding: '6px',
               borderRadius: '50%',
               marginBottom: '4px'
             } : { marginBottom: '4px' }}>
               <Heart 
-                size={20} 
+                size={18} 
                 color={activeTab === 'vote' ? '#4f46e5' : '#6b7280'} 
               />
             </div>
@@ -1326,12 +1326,12 @@ const ChoirSongAppStyled = () => {
           >
             <div style={activeTab === 'rank' ? {
               background: '#eef2ff',
-              padding: '8px',
+              padding: '6px',
               borderRadius: '50%',
               marginBottom: '4px'
             } : { marginBottom: '4px' }}>
               <BarChart3 
-                size={20} 
+                size={18} 
                 color={activeTab === 'rank' ? '#4f46e5' : '#6b7280'} 
               />
             </div>
