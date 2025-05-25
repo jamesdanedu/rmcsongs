@@ -1691,36 +1691,6 @@ const SuggestTab = ({
             <PlusCircle size={18} />
             Submit Song
           </button>
-
-          {/* Suggestion Limit Progress */}
-          <div style={{
-            marginTop: '20px',
-            padding: '12px',
-            background: 'linear-gradient(to right, #f0f9ff, #e0f2fe)',
-            borderRadius: '8px',
-            border: '1px solid #bae6fd'
-          }}>
-            <p style={{ fontSize: '13px', color: '#0c4a6e', marginBottom: '8px', fontWeight: '500' }}>
-              Suggestion Limit
-            </p>
-            <div style={{ 
-              height: '8px', 
-              background: '#e0f2fe', 
-              borderRadius: '4px', 
-              overflow: 'hidden',
-              marginBottom: '8px'
-            }}>
-              <div style={{ 
-                width: `${(recentSuggestions / 3) * 100}%`, 
-                height: '100%', 
-                background: 'linear-gradient(to right, #0ea5e9, #0284c7)',
-                borderRadius: '4px'
-              }}></div>
-            </div>
-            <p style={{ fontSize: '12px', color: '#0369a1', textAlign: 'center' }}>
-              {recentSuggestions}/3 suggestions used in the past 30 days
-            </p>
-          </div>
         </>
       )}
     </div>
