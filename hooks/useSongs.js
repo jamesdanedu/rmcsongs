@@ -1,4 +1,4 @@
-// Integrated hooks/useSongs.js with 3-suggestion limit
+// Integrated hooks/useSongs.js with 3-suggestion limit and YouTube view count support
 
 import { useState, useEffect, useCallback } from 'react';
 import { fetchAllSongs, addSong, fetchVotesForSong, fetchPendingVotesForUser } from '../lib/supabase';
@@ -112,7 +112,7 @@ export function useSongs(user) {
               console.warn(`Invalid YouTube ID found in song "${song.title}": ${song.youtube_video_id}`);
             }
             
-            // Format the song data
+            // Format the song data - including YouTube view count
             return {
               id: song.id,
               title: song.title,
@@ -122,6 +122,7 @@ export function useSongs(user) {
               youtubeThumb: youtubeThumb,
               youtubeTitle: song.youtube_title,
               youtubeVideoId: isValidYouTubeVideoId(song.youtube_video_id) ? song.youtube_video_id : null,
+              youtubeViewCount: song.youtube_view_count || 0, // Include YouTube view count
               suggestedBy: song.suggesterName || 'Anonymous',
               suggestedById: song.suggested_by,
               upvotes: upvotes,
@@ -143,6 +144,7 @@ export function useSongs(user) {
               youtubeThumb: '',
               youtubeTitle: '',
               youtubeVideoId: null,
+              youtubeViewCount: 0,
               suggestedBy: song.suggesterName || 'Anonymous',
               suggestedById: song.suggested_by,
               upvotes: 0,
@@ -195,6 +197,7 @@ export function useSongs(user) {
           youtubeThumb: youtubeThumb,
           youtubeTitle: song.youtube_title,
           youtubeVideoId: isValidYouTubeVideoId(song.youtube_video_id) ? song.youtube_video_id : null,
+          youtubeViewCount: song.youtube_view_count || 0, // Include YouTube view count
           suggestedBy: song.users?.name || 'Anonymous',
           suggestedById: song.suggested_by,
           voteStatus: 'pending', // All these songs are pending for this user
@@ -262,7 +265,7 @@ export function useSongs(user) {
     };
   }, [user, loadSongs]);
   
-  // Function to add a new song
+  // Function to add a new song - now including YouTube view count
   const addNewSong = async (songData) => {
     if (!user) {
       setError('You must be logged in to add a song');
@@ -296,6 +299,7 @@ export function useSongs(user) {
         notes: songData.notes,
         youtube_video_id: songData.youtubeVideoId,
         youtube_title: songData.youtubeTitle,
+        youtube_view_count: songData.youtubeViewCount || null, // Include YouTube view count
         suggested_by: user.id
       });
       
@@ -313,9 +317,6 @@ export function useSongs(user) {
     }
   };
   
-
-
-  
   // Get songs for vote tab (only pending songs)
   const getSongsToVote = () => {
     if (!user) return [];
@@ -324,9 +325,37 @@ export function useSongs(user) {
     return pendingSongs;
   };
   
-  // Get songs sorted by net votes (for rankings)
+  // Get songs sorted by net votes and using YouTube view count as tiebreaker
   const getSortedSongs = () => {
-    return [...songs].sort((a, b) => b.netVotes - a.netVotes);
+    // First sort by netVotes, then by YouTube view count, then by difficulty if available
+    const sorted = [...songs].sort((a, b) => {
+      // Primary sort by net votes (upvotes minus downvotes)
+      const votesDiff = b.netVotes - a.netVotes;
+      
+      // If votes are equal, use YouTube view count as tiebreaker
+      if (votesDiff === 0) {
+        return (b.youtubeViewCount || 0) - (a.youtubeViewCount || 0);
+      }
+      
+      return votesDiff;
+    });
+    
+    // Apply dense ranking algorithm
+    let currentRank = 1;
+    let previousVotes = sorted.length > 0 ? sorted[0].netVotes : 0;
+    
+    return sorted.map((song, index) => {
+      // If this song has fewer votes than the previous one, increment the rank
+      if (song.netVotes < previousVotes) {
+        currentRank = index + 1;
+        previousVotes = song.netVotes;
+      }
+      
+      return {
+        ...song,
+        rank: currentRank
+      };
+    });
   };
   
   return {
@@ -336,7 +365,7 @@ export function useSongs(user) {
     error,
     addNewSong,
     getSongsToVote,     // Returns pendingSongs
-    getSortedSongs,     // Returns songs sorted by net votes
+    getSortedSongs,     // Returns songs sorted by net votes with dense ranking
     loadSongs,          // Export loadSongs so it can be called from outside
     
     // New exports for suggestion limit feature
