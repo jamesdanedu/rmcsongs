@@ -1,11 +1,12 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { X, Mic, PlusCircle, Heart, BarChart3, Music, ListMusic, UserPlus, Star, Search, Play, ThumbsUp, ThumbsDown, SkipForward } from 'lucide-react';
+import { X, Mic, PlusCircle, Heart, BarChart3, Music, ListMusic, UserPlus, Star, Search, Play, ThumbsUp, ThumbsDown, SkipForward, Eye } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useSongs } from '../hooks/useSongs';
 import { useVotes } from '../hooks/useVotes';
 import UserLoginForm from './UserLoginForm';
+import { getVideoStatistics } from '../lib/youtube-api';
 
 // CSS-in-JS styles to ensure they work regardless of Tailwind issues
 const styles = {
@@ -625,6 +626,20 @@ const styles = {
     padding: '8px',
     borderRadius: '4px',
     color: '#6b7280'
+  },
+  
+  // View count badge style
+  viewCountBadge: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    padding: '4px 8px',
+    borderRadius: '12px',
+    background: '#f0f9ff',
+    border: '1px solid #bae6fd',
+    color: '#0284c7',
+    fontSize: '11px',
+    fontWeight: '500',
+    marginLeft: '8px'
   }
 };
 
@@ -933,6 +948,22 @@ const SingleSongVoteCard = ({ song, onUpvote, onDownvote, onSkip, isVoting, isMu
             </div>
           )}
 
+          {/* Display YouTube view count if available */}
+          {song.youtubeViewCount > 0 && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              marginBottom: '12px',
+              fontSize: '12px',
+              color: '#6b7280'
+            }}>
+              <div style={styles.viewCountBadge}>
+                <Eye size={12} style={{ marginRight: '4px' }} />
+                {formatViewCount(song.youtubeViewCount)} views
+              </div>
+            </div>
+          )}
+
           {/* Difficulty Slider for Musicians */}
           {isMusician && (
             <div style={styles.difficultySection}>
@@ -1033,6 +1064,21 @@ const SingleSongVoteCard = ({ song, onUpvote, onDownvote, onSkip, isVoting, isMu
   );
 };
 
+// Format view count with K and M abbreviations
+const formatViewCount = (count) => {
+  if (!count) return 'N/A';
+
+  if (count >= 1000000000) { // Billions
+    return `${(count / 1000000000).toFixed(count >= 10000000000 ? 0 : 1)}B`;
+  } else if (count >= 1000000) { // Millions
+    return `${(count / 1000000).toFixed(count >= 10000000 ? 0 : 1)}M`;
+  } else if (count >= 1000) { // Thousands
+    return `${(count / 1000).toFixed(count >= 10000 ? 0 : 1)}K`;
+  } else { // Less than a thousand
+    return count.toString();
+  }
+};
+
 const ChoirSongAppStyled = () => {
   // Use database hooks instead of local state
   const { user, isLoggedIn, logout, isLoading: authLoading, error: authError } = useAuth();
@@ -1047,7 +1093,8 @@ const ChoirSongAppStyled = () => {
     artist: '',
     notes: '',
     youtubeVideoId: '',
-    youtubeTitle: ''
+    youtubeTitle: '',
+    youtubeViewCount: null
   });
 
   // YouTube search state
@@ -1055,6 +1102,8 @@ const ChoirSongAppStyled = () => {
   const [youtubeResults, setYoutubeResults] = useState([]);
   const [selectedVideo, setSelectedVideo] = useState(null);
   const [searchingYouTube, setSearchingYouTube] = useState(false);
+  const [fetchingViewCount, setFetchingViewCount] = useState(false);
+  const [videoViewCount, setVideoViewCount] = useState(null);
 
   // Auto-populate YouTube search when title and artist change
   useEffect(() => {
@@ -1084,6 +1133,40 @@ const ChoirSongAppStyled = () => {
       setCurrentSongIndex(0);
     }
   }, [activeTab, pendingSongs]);
+
+  // Fetch video statistics when a video is selected
+  useEffect(() => {
+    if (selectedVideo && selectedVideo.id) {
+      setFetchingViewCount(true);
+      getVideoStatistics(selectedVideo.id)
+        .then(stats => {
+          if (stats && stats.viewCount) {
+            // Parse as integer and update state
+            const viewCount = parseInt(stats.viewCount, 10);
+            setVideoViewCount(viewCount);
+            
+            // Update the newSong object to include the view count
+            setNewSong(prevSong => ({
+              ...prevSong,
+              youtubeViewCount: viewCount
+            }));
+            
+            console.log(`Video has ${viewCount.toLocaleString()} views`);
+          } else {
+            setVideoViewCount(null);
+          }
+        })
+        .catch(err => {
+          console.error('Error fetching video statistics:', err);
+          setVideoViewCount(null);
+        })
+        .finally(() => {
+          setFetchingViewCount(false);
+        });
+    } else {
+      setVideoViewCount(null);
+    }
+  }, [selectedVideo]);
   
   // Song handlers - now using database
   const handleAddSong = async () => {
@@ -1093,15 +1176,24 @@ const ChoirSongAppStyled = () => {
         artist: newSong.artist,
         notes: newSong.notes,
         youtubeVideoId: newSong.youtubeVideoId,
-        youtubeTitle: newSong.youtubeTitle
+        youtubeTitle: newSong.youtubeTitle,
+        youtubeViewCount: newSong.youtubeViewCount || null
       };
       
       const success = await addNewSong(songData);
       if (success) {
-        setNewSong({ title: '', artist: '', notes: '', youtubeVideoId: '', youtubeTitle: '' });
+        setNewSong({ 
+          title: '', 
+          artist: '', 
+          notes: '', 
+          youtubeVideoId: '', 
+          youtubeTitle: '',
+          youtubeViewCount: null
+        });
         setSelectedVideo(null);
         setYoutubeResults([]);
         setYoutubeQuery('');
+        setVideoViewCount(null);
       }
     }
   };
@@ -1145,6 +1237,7 @@ const ChoirSongAppStyled = () => {
       ...newSong,
       youtubeVideoId: video.id,
       youtubeTitle: video.title
+      // youtubeViewCount will be set by the useEffect when stats are fetched
     });
   };
 
@@ -1255,6 +1348,8 @@ const ChoirSongAppStyled = () => {
             styles={styles}
             user={user}
             songs={songs}
+            videoViewCount={videoViewCount}
+            fetchingViewCount={fetchingViewCount}
           />
         )}
         
@@ -1343,9 +1438,7 @@ const ChoirSongAppStyled = () => {
   );
 };
 
-// Enhanced SuggestTab Component with Next Available Date 
-// This is only the SuggestTab component portion that needs to be updated
-
+// Enhanced SuggestTab Component with Next Available Date and YouTube View Count
 const SuggestTab = ({ 
   newSong, 
   setNewSong, 
@@ -1359,7 +1452,9 @@ const SuggestTab = ({
   handleSelectVideo,
   styles,
   user,
-  songs 
+  songs,
+  videoViewCount,
+  fetchingViewCount
 }) => {
   const isValid = newSong?.title?.trim() && newSong?.artist?.trim();
   
@@ -1555,7 +1650,6 @@ const SuggestTab = ({
             />
           </div>
 
-          {/* Rest of the component remains the same... */}
           {/* YouTube Search Section */}
           <div style={styles.youtubeSearchContainer}>
             <label style={styles.label}>
@@ -1637,7 +1731,7 @@ const SuggestTab = ({
               </div>
             )}
 
-            {/* Selected Video Display */}
+            {/* Selected Video Display with View Count */}
             {selectedVideo && (
               <div style={{ 
                 marginTop: '12px', 
@@ -1649,9 +1743,34 @@ const SuggestTab = ({
                 <p style={{ fontSize: '12px', color: '#4f46e5', marginBottom: '4px' }}>
                   ✓ Selected Video:
                 </p>
-                <p style={{ fontSize: '14px', fontWeight: '500', color: '#4338ca' }}>
+                <p style={{ fontSize: '14px', fontWeight: '500', color: '#4338ca', marginBottom: '8px' }}>
                   {selectedVideo.title}
                 </p>
+                
+                {/* View Count Display */}
+                <div style={{ display: 'flex', alignItems: 'center' }}>
+                  {fetchingViewCount ? (
+                    <p style={{ fontSize: '12px', color: '#6b7280' }}>
+                      Fetching view count...
+                    </p>
+                  ) : videoViewCount ? (
+                    <div style={styles.viewCountBadge}>
+                      <Eye size={12} style={{ marginRight: '4px' }} />
+                      {formatViewCount(videoViewCount)} views
+                    </div>
+                  ) : null}
+                </div>
+                
+                {videoViewCount > 0 && (
+                  <p style={{ 
+                    fontSize: '11px', 
+                    color: '#6b7280', 
+                    marginTop: '8px',
+                    fontStyle: 'italic'
+                  }}>
+                    View count will be saved with your song suggestion and used for tiebreaking in rankings
+                  </p>
+                )}
               </div>
             )}
           </div>
@@ -1778,10 +1897,73 @@ const VoteTab = ({ songs, currentSongIndex, user, handleUpvote, handleDownvote, 
   );
 };
 
-// RankingsTab Component - Compact Table with Icon Headers
+// RankingsTab Component - With Dense Ranking and View Count Tiebreaker
 const RankingsTab = ({ songs, isLoading, styles }) => {
   const [showPlayer, setShowPlayer] = useState(false);
   const [selectedSong, setSelectedSong] = useState(null);
+  const [rankedSongs, setRankedSongs] = useState([]);
+
+  // Apply dense ranking algorithm when songs change
+  useEffect(() => {
+    if (!Array.isArray(songs) || songs.length === 0) {
+      setRankedSongs([]);
+      return;
+    }
+    
+    // Sort by upvotes first, then by view count as tiebreaker
+    const sortedSongs = [...songs].sort((a, b) => {
+      // First sort by upvotes (descending) - ensure we have numbers
+      const aUpvotes = parseInt(a.upvotes) || 0;
+      const bUpvotes = parseInt(b.upvotes) || 0;
+      
+      if (bUpvotes !== aUpvotes) {
+        return bUpvotes - aUpvotes;
+      }
+      
+      // If upvotes are equal, sort by YouTube view count (descending)
+      const aViews = parseInt(a.youtubeViewCount) || 0;
+      const bViews = parseInt(b.youtubeViewCount) || 0;
+      
+      if (aViews !== bViews) {
+        return bViews - aViews;
+      }
+      
+      // If view counts are also equal, sort by difficulty (ascending - easier first)
+      const aDiff = parseFloat(a.averageDifficulty);
+      const bDiff = parseFloat(b.averageDifficulty);
+      
+      // If both have difficulty ratings
+      if (!isNaN(aDiff) && !isNaN(bDiff)) {
+        return aDiff - bDiff;
+      }
+      
+      // If only one has difficulty rating, prioritize the one with rating
+      if (!isNaN(aDiff) && isNaN(bDiff)) return -1;
+      if (isNaN(aDiff) && !isNaN(bDiff)) return 1;
+      
+      // If all are equal, maintain current order
+      return 0;
+    });
+    
+    // Apply dense ranking
+    let currentRank = 1;
+    let previousUpvotes = sortedSongs[0]?.upvotes || 0;
+    
+    const songsWithRanks = sortedSongs.map((song, index) => {
+      // If this song has fewer upvotes than the previous one, increment the rank
+      if ((parseInt(song.upvotes) || 0) < previousUpvotes) {
+        currentRank = index + 1;
+        previousUpvotes = parseInt(song.upvotes) || 0;
+      }
+      
+      return {
+        ...song,
+        rank: currentRank
+      };
+    });
+    
+    setRankedSongs(songsWithRanks);
+  }, [songs]);
 
   if (isLoading) {
     return (
@@ -1798,33 +1980,6 @@ const RankingsTab = ({ songs, isLoading, styles }) => {
     }
   };
 
-  // Sort by upvotes first, then by lowest difficulty (if available)
-  const sortedSongs = [...(songs || [])].sort((a, b) => {
-    // First sort by upvotes (descending) - ensure we have numbers
-    const aUpvotes = parseInt(a.upvotes) || 0;
-    const bUpvotes = parseInt(b.upvotes) || 0;
-    
-    if (bUpvotes !== aUpvotes) {
-      return bUpvotes - aUpvotes;
-    }
-    
-    // If upvotes are equal, sort by difficulty (ascending - easier first)
-    const aDiff = parseFloat(a.averageDifficulty);
-    const bDiff = parseFloat(b.averageDifficulty);
-    
-    // If both have difficulty ratings
-    if (!isNaN(aDiff) && !isNaN(bDiff)) {
-      return aDiff - bDiff;
-    }
-    
-    // If only one has difficulty rating, prioritize the one with rating
-    if (!isNaN(aDiff) && isNaN(bDiff)) return -1;
-    if (isNaN(aDiff) && !isNaN(bDiff)) return 1;
-    
-    // If neither has difficulty rating, maintain current order
-    return 0;
-  });
-
   return (
     <>
       <div style={styles.card}>
@@ -1833,7 +1988,7 @@ const RankingsTab = ({ songs, isLoading, styles }) => {
           Song Rankings
         </h2>
         
-        {!Array.isArray(songs) || songs.length === 0 ? (
+        {!Array.isArray(rankedSongs) || rankedSongs.length === 0 ? (
           <div style={styles.emptyState}>
             <ListMusic size={48} style={{ color: '#a5b4fc', marginBottom: '12px', opacity: 0.7 }} />
             <p style={{ color: '#4f46e5', fontWeight: '500', marginBottom: '4px' }}>
@@ -1859,10 +2014,13 @@ const RankingsTab = ({ songs, isLoading, styles }) => {
                   <th style={{ ...styles.tableCellCenterHeader, width: '60px' }}>
                     <Star size={14} title="Difficulty" />
                   </th>
+                  <th style={{ ...styles.tableCellCenterHeader, width: '50px' }}>
+                    <Eye size={14} title="Views" />
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {sortedSongs.map((song, index) => (
+                {rankedSongs.map((song, index) => (
                   <tr 
                     key={song.id || index}
                     style={styles.tableRow}
@@ -1880,10 +2038,10 @@ const RankingsTab = ({ songs, isLoading, styles }) => {
                     <td style={styles.tableCellCenter}>
                       <div style={{
                         ...styles.rankBadge,
-                        background: index < 3 ? '#fbbf24' : '#4f46e5',
+                        background: song.rank <= 3 ? '#fbbf24' : '#4f46e5',
                         color: 'white'
                       }}>
-                        {index + 1}
+                        {song.rank}
                       </div>
                     </td>
                     <td style={styles.tableCell}>
@@ -1930,6 +2088,15 @@ const RankingsTab = ({ songs, isLoading, styles }) => {
                       ) : (
                         <span style={{ color: '#9ca3af', fontSize: '11px' }}>NR</span>
                       )}
+                    </td>
+                    <td style={styles.tableCellCenter}>
+                      <div style={{
+                        color: '#0ea5e9',
+                        fontSize: '12px',
+                        fontWeight: '500'
+                      }}>
+                        {formatViewCount(song.youtubeViewCount)}
+                      </div>
                     </td>
                   </tr>
                 ))}
