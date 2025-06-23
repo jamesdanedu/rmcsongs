@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { X, Mic, PlusCircle, Heart, BarChart3, Music, ListMusic, UserPlus, Star, Search, Play, ThumbsUp, ThumbsDown, SkipForward, Eye } from 'lucide-react';
+import { X, Mic, PlusCircle, Heart, BarChart3, Music, ListMusic, UserPlus, Star, Search, Play, ThumbsUp, ThumbsDown, SkipForward, Eye, Book } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useSongs } from '../hooks/useSongs';
 import { useVotes } from '../hooks/useVotes';
@@ -640,6 +640,19 @@ const styles = {
     fontSize: '11px',
     fontWeight: '500',
     marginLeft: '8px'
+  },
+
+  // Coming soon badge style
+  comingSoonBadge: {
+    display: 'inline-block',
+    background: 'linear-gradient(to right, #ec4899, #f43f5e)',
+    color: 'white',
+    padding: '4px 10px',
+    borderRadius: '20px',
+    fontSize: '12px',
+    fontWeight: '600',
+    marginLeft: '10px',
+    marginBottom: '4px'
   }
 };
 
@@ -1374,6 +1387,12 @@ const ChoirSongAppStyled = () => {
             styles={styles}
           />
         )}
+
+        {activeTab === 'catalog' && (
+          <CatalogTab 
+            styles={styles}
+          />
+        )}
       </div>
 
       {/* Tab Navigation */}
@@ -1431,6 +1450,24 @@ const ChoirSongAppStyled = () => {
               />
             </div>
             <span>Rankings</span>
+          </button>
+
+          <button
+            style={activeTab === 'catalog' ? styles.activeTab : styles.tab}
+            onClick={() => setActiveTab('catalog')}
+          >
+            <div style={activeTab === 'catalog' ? {
+              background: '#eef2ff',
+              padding: '6px',
+              borderRadius: '50%',
+              marginBottom: '4px'
+            } : { marginBottom: '4px' }}>
+              <Book 
+                size={18} 
+                color={activeTab === 'catalog' ? '#4f46e5' : '#6b7280'} 
+              />
+            </div>
+            <span>Catalog</span>
           </button>
         </div>
       </div>
@@ -2116,6 +2153,52 @@ const RankingsTab = ({ songs, isLoading, styles }) => {
         }}
       />
     </>
+  );
+};
+
+// CatalogTab Component
+const CatalogTab = ({ styles }) => {
+  return (
+    <div style={styles.card}>
+      <h2 style={styles.sectionTitle}>
+        <Book size={20} style={{ marginRight: '8px', color: '#6366f1' }} />
+        Song Catalog
+        <span style={styles.comingSoonBadge}>Coming Soon</span>
+      </h2>
+      
+      <div style={{ 
+        padding: '24px', 
+        background: 'linear-gradient(to right, #eef2ff, #dbeafe)', 
+        borderRadius: '8px', 
+        textAlign: 'center',
+        border: '1px solid #e0e7ff'
+      }}>
+        <Book size={60} style={{ color: '#6366f1', marginBottom: '16px', opacity: 0.7 }} />
+        <h3 style={{ color: '#4338ca', fontSize: '18px', fontWeight: '600', marginBottom: '8px' }}>
+          Song Catalog Management
+        </h3>
+        <p style={{ color: '#4f46e5', marginBottom: '16px' }}>
+          This feature will manage the group's song catalog, lyrics, and gig playlists.
+        </p>
+        <div style={{
+          background: 'white',
+          padding: '12px',
+          borderRadius: '8px',
+          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+          border: '1px solid #c7d2fe',
+          display: 'inline-block'
+        }}>
+          <p style={{ 
+            fontSize: '14px', 
+            fontWeight: '500', 
+            color: '#4f46e5', 
+            margin: 0 
+          }}>
+            Coming in Autumn 2025
+          </p>
+        </div>
+      </div>
+    </div>
   );
 };
 
