@@ -1,117 +1,150 @@
-// hooks/useVotes.js - Combined approach with retry logic and robust error handling
-
-import { useState } from 'react';
+// hooks/useVotes.js
+import { useState, useCallback, useEffect } from 'react';
 import { addVote } from '../lib/supabase';
+import { 
+  queueOfflineAction, 
+  getOfflineActions, 
+  removeOfflineAction 
+} from '../utils/offlineStorage';
+import { requestBackgroundSync } from '../utils/serviceWorker';
 
 /**
- * Custom hook for handling song votes (upvotes and downvotes)
- * - Includes retry logic for race conditions
- * - Provides specific error handling
- * - Offers convenience methods for different vote types
+ * Custom hook for handling song votes with offline support
+ * 
+ * @param {Object} user - Current user object
+ * @param {boolean} isOnline - Current online status
+ * @param {function} loadSongs - Function to reload songs data
+ * @returns {Object} - Vote management functions and state
  */
-export function useVotes(user) {
+export function useVotes(user, isOnline, loadSongs) {
   const [isVoting, setIsVoting] = useState(false);
   const [error, setError] = useState(null);
   
-  // Function to vote for a song with specific vote type
-  const voteForSong = async (songId, voteType = 'up') => {
+  // Process offline votes when coming back online
+  useEffect(() => {
+    if (!isOnline || !user) return;
+    
+    const processOfflineVotes = async () => {
+      const pendingActions = getOfflineActions('pending')
+        .filter(action => action.type === 'VOTE');
+      
+      if (pendingActions.length === 0) return;
+      
+      // Request background sync
+      const syncRequested = await requestBackgroundSync('sync-songs');
+      if (!syncRequested) {
+        console.warn('Background sync not supported, manually processing votes');
+        
+        // Process each vote manually if background sync not supported
+        for (const action of pendingActions) {
+          try {
+            if (action.type === 'VOTE') {
+              await addVote(action.data.songId, action.data.userId);
+              
+              // Remove from offline queue
+              removeOfflineAction(action.id);
+            }
+          } catch (error) {
+            console.error(`Error processing offline vote ${action.id}:`, error);
+            
+            // If it's a duplicate vote, remove from queue
+            if (error.code === '23505') {
+              removeOfflineAction(action.id);
+            }
+          }
+        }
+        
+        // Reload songs after processing
+        if (typeof loadSongs === 'function') {
+          await loadSongs();
+        }
+      }
+    };
+    
+    processOfflineVotes();
+  }, [isOnline, user, loadSongs]);
+  
+  /**
+   * Vote for a song with offline support
+   * @param {string} songId - ID of the song to vote for
+   * @returns {Promise<boolean>} - Whether the vote was successful
+   */
+  const voteForSong = useCallback(async (songId) => {
     if (!user) {
       setError('You must be logged in to vote');
-      return false;
-    }
-
-    // Validate songId
-    if (!songId) {
-      setError('Invalid song ID');
-      return false;
-    }
-
-    // Validate voteType
-    if (voteType !== 'up' && voteType !== 'down') {
-      setError('Invalid vote type. Must be "up" or "down"');
       return false;
     }
     
     setIsVoting(true);
     setError(null);
     
-    // Add retry logic for race conditions
-    let retries = 3;
-    
-    while (retries > 0) {
-      try {
-        console.log(`Attempt ${4-retries}/3: Voting "${voteType}" for song ID: ${songId}, User ID: ${user.id}`);
-        
-        // Call the addVote function with vote type
-        await addVote(songId, user.id, voteType);
-        
-        console.log(`${voteType === 'up' ? 'Upvote' : 'Downvote'} successfully recorded`);
-        setIsVoting(false);
-        return true;
-      } catch (err) {
-        retries--;
-        console.error(`Attempt ${4-retries}/3 failed. Error voting for song:`, err);
-        
-        // For certain error types, don't retry
-        if (
-          err.message?.includes('No pending vote found') || 
-          err.code === '23505' || // Unique constraint violation
-          err.message?.includes('not available for voting')
-        ) {
-          // These are "final" errors that won't be fixed by retrying
-          if (err.message?.includes('No pending vote found')) {
-            setError('You have already voted on this song or it is not available for voting');
-          } else if (err.code === '23505') {
-            setError('You have already voted on this song');
-          } else {
-            setError(`Failed to register ${voteType === 'up' ? 'upvote' : 'downvote'}: ${err.message}`);
+    try {
+      if (isOnline) {
+        // Online: Vote directly
+        await addVote(songId, user.id);
+      } else {
+        // Offline: Queue the vote
+        const actionId = queueOfflineAction({
+          type: 'VOTE',
+          data: {
+            songId,
+            userId: user.id
           }
-          setIsVoting(false);
-          return false;
-        }
+        });
         
-        // If this was the last retry, handle the error
-        if (retries === 0) {
-          setError(`Failed to register ${voteType === 'up' ? 'upvote' : 'downvote'}. Please try again.`);
-          setIsVoting(false);
-          return false;
+        if (!actionId) {
+          throw new Error('Failed to queue vote for offline processing');
         }
-        
-        // Wait before retrying - increase wait time with each retry
-        const waitTime = 300 * (4 - retries); // 300ms, 600ms, 900ms
-        console.log(`Waiting ${waitTime}ms before retry...`);
-        await new Promise(r => setTimeout(r, waitTime));
       }
+      
+      // Reload songs to update UI
+      if (typeof loadSongs === 'function') {
+        await loadSongs();
+      }
+      
+      return true;
+    } catch (err) {
+      console.error('Error voting for song:', err);
+      
+      // If it's a duplicate vote error, don't show an error to the user
+      if (err.code === '23505') {
+        // Reload songs to make sure UI is in sync
+        if (typeof loadSongs === 'function') {
+          await loadSongs();
+        }
+        return true;
+      }
+      
+      setError('Failed to vote. Please try again.');
+      return false;
+    } finally {
+      setIsVoting(false);
     }
-    
-    // This should never be reached because the loop will either return true on success
-    // or return false on the last retry, but included for completeness
-    setIsVoting(false);
-    return false;
-  };
-
-  // Convenience function for upvoting
-  const upvoteForSong = async (songId) => {
-    return await voteForSong(songId, 'up');
-  };
-
-  // Convenience function for downvoting
-  const downvoteForSong = async (songId) => {
-    return await voteForSong(songId, 'down');
-  };
-
-  // Clear any existing errors
-  const clearError = () => {
-    setError(null);
-  };
+  }, [user, isOnline, loadSongs]);
   
-  // Return all functions and state
+  /**
+   * Check if user has already voted for a song
+   * @param {string} songId - ID of the song to check
+   * @returns {boolean} - Whether the user has voted for this song
+   */
+  const hasVotedForSong = useCallback((songId) => {
+    if (!user) return false;
+    
+    // Check offline votes
+    const pendingVotes = getOfflineActions('pending')
+      .filter(action => 
+        action.type === 'VOTE' && 
+        action.data.songId === songId && 
+        action.data.userId === user.id
+      );
+    
+    return pendingVotes.length > 0;
+  }, [user]);
+  
   return {
     isVoting,
     error,
-    voteForSong,      // Generic function: voteForSong(songId, 'up'/'down')
-    upvoteForSong,    // Convenience: upvoteForSong(songId)
-    downvoteForSong,  // Convenience: downvoteForSong(songId)
-    clearError        // Utility to reset error state
+    voteForSong,
+    hasVotedForSong
   };
 }
