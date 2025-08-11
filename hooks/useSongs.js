@@ -1,106 +1,116 @@
-// Integrated hooks/useSongs.js with 3-suggestion limit and YouTube view count support
-
+// hooks/useSongs.js
 import { useState, useEffect, useCallback } from 'react';
-import { fetchAllSongs, addSong, fetchVotesForSong, fetchPendingVotesForUser } from '../lib/supabase';
+import { fetchAllSongs, addSong } from '../lib/supabase';
 import { getYouTubeEmbedUrl, getYouTubeThumbnail, isValidYouTubeVideoId } from '../lib/youtube-api';
 import { supabaseClient } from '../lib/supabase';
+import { 
+  cacheSongs, 
+  getCachedSongs, 
+  queueOfflineAction, 
+  getOfflineActions,
+  applyOfflineChangesToSongs,
+  getPendingActionCount,
+  removeOfflineAction
+} from '../utils/offlineStorage';
+import { requestBackgroundSync } from '../utils/serviceWorker';
 
 /**
- * Custom hook for managing songs data
+ * Custom hook for managing songs data with offline support
  */
 export function useSongs(user) {
   const [songs, setSongs] = useState([]);
-  const [pendingSongs, setPendingSongs] = useState([]); // Songs for vote tab
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
+  const [offlineActionsCount, setOfflineActionsCount] = useState(0);
   
-  // New state for suggestion limit feature
-  const [userSuggestionCount, setUserSuggestionCount] = useState(0);
-  const [canSuggestMore, setCanSuggestMore] = useState(true);
-  const [nextSuggestionDate, setNextSuggestionDate] = useState(null);
-  
-  // Maximum number of suggestions allowed in 30 days
-  const MAX_SUGGESTIONS_PER_MONTH = 3;
-  
-  // Check if a user can suggest more songs and when they can next suggest
-  const checkSuggestionLimit = useCallback(async () => {
-    if (!user) return { canSuggest: false };
+  // Check online status
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
     
-    try {
-      // Get the date 30 days ago
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      
-      // Query for songs suggested by this user in the last 30 days
-      const { data, error } = await supabaseClient
-        .from('songs')
-        .select('id, created_at')
-        .eq('suggested_by', user.id)
-        .gte('created_at', thirtyDaysAgo.toISOString())
-        .order('created_at', { ascending: true });
-      
-      if (error) throw error;
-      
-      const recentSuggestions = data || [];
-      const count = recentSuggestions.length;
-      
-      setUserSuggestionCount(count);
-      
-      // If user has reached the limit, calculate when they can suggest again
-      if (count >= MAX_SUGGESTIONS_PER_MONTH && recentSuggestions.length > 0) {
-        // The oldest suggestion's date + 30 days = when they can suggest again
-        const oldestSuggestion = new Date(recentSuggestions[0].created_at);
-        const nextAvailable = new Date(oldestSuggestion);
-        nextAvailable.setDate(nextAvailable.getDate() + 30);
-        
-        setNextSuggestionDate(nextAvailable);
-        setCanSuggestMore(false);
-        
-        return { 
-          canSuggest: false, 
-          nextDate: nextAvailable, 
-          suggestionsRemaining: 0 
-        };
-      } else {
-        setNextSuggestionDate(null);
-        setCanSuggestMore(true);
-        
-        return { 
-          canSuggest: true, 
-          nextDate: null, 
-          suggestionsRemaining: MAX_SUGGESTIONS_PER_MONTH - count 
-        };
-      }
-    } catch (err) {
-      console.error('Error checking suggestion limit:', err);
-      return { canSuggest: true }; // Allow by default if check fails
-    }
-  }, [user]);
+    const handleOnline = () => {
+      setIsOnline(true);
+      // Store last online timestamp
+      localStorage.setItem('rmc_last_online', Date.now().toString());
+      // Try to sync when coming back online
+      requestBackgroundSync('sync-songs').catch(err => {
+        console.warn('Background sync request failed:', err);
+      });
+    };
+    
+    const handleOffline = () => setIsOnline(false);
+    
+    setIsOnline(navigator.onLine);
+    
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
   
-  // Load all songs (for rankings tab)
-  const loadAllSongs = useCallback(async () => {
+  // Update pending actions count
+  useEffect(() => {
+    const updatePendingCount = () => {
+      const count = getPendingActionCount();
+      setOfflineActionsCount(count);
+    };
+    
+    // Update immediately
+    updatePendingCount();
+    
+    // Set up interval for periodic updates
+    const interval = setInterval(updatePendingCount, 5000);
+    
+    // Listen for offline action events
+    const handleActionEvents = () => updatePendingCount();
+    
+    window.addEventListener('offline-action-queued', handleActionEvents);
+    window.addEventListener('offline-action-updated', handleActionEvents);
+    window.addEventListener('offline-action-removed', handleActionEvents);
+    window.addEventListener('offline-actions-cleaned', handleActionEvents);
+    window.addEventListener('sw-sync-complete', handleActionEvents);
+    
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('offline-action-queued', handleActionEvents);
+      window.removeEventListener('offline-action-updated', handleActionEvents);
+      window.removeEventListener('offline-action-removed', handleActionEvents);
+      window.removeEventListener('offline-actions-cleaned', handleActionEvents);
+      window.removeEventListener('sw-sync-complete', handleActionEvents);
+    };
+  }, []);
+  
+  // Function to load songs
+  const loadSongs = useCallback(async () => {
     if (!user) return;
     
     setIsLoading(true);
     setError(null);
     
     try {
-      // Check suggestion limit whenever songs are loaded
-      await checkSuggestionLimit();
+      let songsData;
       
-      const songsData = await fetchAllSongs();
-      
-      // Get vote counts for each song
-      const songsWithVotes = await Promise.all(
-        songsData.map(async (song) => {
+      if (!isOnline) {
+        // Offline: Use cached data
+        songsData = getCachedSongs();
+        if (!songsData) {
+          setError('You are offline and no cached songs are available.');
+          setIsLoading(false);
+          return;
+        }
+        
+        // Apply any pending offline changes to the cached data
+        songsData = applyOfflineChangesToSongs(songsData, user);
+      } else {
+        // Online: Fetch from API
+        songsData = await fetchAllSongs();
+        
+        // Process songs to add YouTube info and format for use
+        songsData = await Promise.all(songsData.map(async (song) => {
           try {
-            const votes = await fetchVotesForSong(song.id);
-            
-            // Count upvotes and downvotes separately
-            const upvotes = votes.filter(vote => vote.vote_type === 'up').length;
-            const downvotes = votes.filter(vote => vote.vote_type === 'down').length;
-            const netVotes = upvotes - downvotes;
-            
             // Validate YouTube video ID
             let youtubeUrl = '';
             let youtubeThumb = '';
@@ -108,28 +118,26 @@ export function useSongs(user) {
             if (song.youtube_video_id && isValidYouTubeVideoId(song.youtube_video_id)) {
               youtubeUrl = getYouTubeEmbedUrl(song.youtube_video_id);
               youtubeThumb = getYouTubeThumbnail(song.youtube_video_id);
-            } else if (song.youtube_video_id) {
-              console.warn(`Invalid YouTube ID found in song "${song.title}": ${song.youtube_video_id}`);
             }
             
-            // Format the song data - including YouTube view count
+            // Get votes for this song
+            const votes = song.votes || [];
+            
+            // Format the song data
             return {
               id: song.id,
               title: song.title,
               artist: song.artist,
               notes: song.notes,
-              youtubeUrl: youtubeUrl,
-              youtubeThumb: youtubeThumb,
+              youtubeUrl,
+              youtubeThumb,
               youtubeTitle: song.youtube_title,
               youtubeVideoId: isValidYouTubeVideoId(song.youtube_video_id) ? song.youtube_video_id : null,
-              youtubeViewCount: song.youtube_view_count || 0, // Include YouTube view count
-              suggestedBy: song.suggesterName || 'Anonymous',
+              suggestedBy: song.users?.name || 'Anonymous',
               suggestedById: song.suggested_by,
-              upvotes: upvotes,
-              downvotes: downvotes,
-              netVotes: netVotes,
-              totalVotes: upvotes + downvotes,
-              votes: netVotes, // For backward compatibility with ranking display
+              votes: votes.length,
+              voters: votes.map(vote => vote.user_id),
+              votedByCurrentUser: votes.some(vote => vote.user_id === user.id),
               createdAt: song.created_at
             };
           } catch (err) {
@@ -144,235 +152,200 @@ export function useSongs(user) {
               youtubeThumb: '',
               youtubeTitle: '',
               youtubeVideoId: null,
-              youtubeViewCount: 0,
-              suggestedBy: song.suggesterName || 'Anonymous',
+              suggestedBy: song.users?.name || 'Anonymous',
               suggestedById: song.suggested_by,
-              upvotes: 0,
-              downvotes: 0,
-              netVotes: 0,
-              totalVotes: 0,
               votes: 0,
+              voters: [],
+              votedByCurrentUser: false,
               createdAt: song.created_at || new Date().toISOString()
             };
           }
-        })
-      );
+        }));
+        
+        // Cache songs for offline use
+        cacheSongs(songsData);
+        
+        // Apply any pending offline changes to the fetched data
+        songsData = applyOfflineChangesToSongs(songsData, user);
+      }
       
-      setSongs(songsWithVotes);
+      setSongs(songsData);
     } catch (err) {
-      console.error('Error loading all songs:', err);
-      setError('Failed to load songs. Please try again.');
+      console.error('Error loading songs:', err);
+      
+      // Try to use cached data if online fetch fails
+      const cachedSongs = getCachedSongs();
+      if (cachedSongs) {
+        const processedSongs = applyOfflineChangesToSongs(cachedSongs, user);
+        setSongs(processedSongs);
+        setError('Using cached data. Some information may be outdated.');
+      } else {
+        setError('Failed to load songs. Please try again.');
+      }
     } finally {
       setIsLoading(false);
     }
-  }, [user, checkSuggestionLimit]);
-
-  // Load pending songs (for vote tab)
-  const loadPendingSongs = useCallback(async () => {
-    if (!user) return;
-    
-    try {
-      console.log('Loading pending songs for vote tab');
-      const pendingVotesData = await fetchPendingVotesForUser(user.id);
-      
-      // Transform the data structure
-      const pendingSongsFormatted = pendingVotesData.map(voteRecord => {
-        const song = voteRecord.songs;
-        
-        // Validate YouTube video ID
-        let youtubeUrl = '';
-        let youtubeThumb = '';
-        
-        if (song.youtube_video_id && isValidYouTubeVideoId(song.youtube_video_id)) {
-          youtubeUrl = getYouTubeEmbedUrl(song.youtube_video_id);
-          youtubeThumb = getYouTubeThumbnail(song.youtube_video_id);
-        }
-        
-        return {
-          id: song.id,
-          title: song.title,
-          artist: song.artist,
-          notes: song.notes,
-          youtubeUrl: youtubeUrl,
-          youtubeThumb: youtubeThumb,
-          youtubeTitle: song.youtube_title,
-          youtubeVideoId: isValidYouTubeVideoId(song.youtube_video_id) ? song.youtube_video_id : null,
-          youtubeViewCount: song.youtube_view_count || 0, // Include YouTube view count
-          suggestedBy: song.users?.name || 'Anonymous',
-          suggestedById: song.suggested_by,
-          voteStatus: 'pending', // All these songs are pending for this user
-          createdAt: song.created_at
-        };
-      });
-      
-      console.log(`Loaded ${pendingSongsFormatted.length} pending songs for vote tab`);
-      setPendingSongs(pendingSongsFormatted);
-    } catch (err) {
-      console.error('Error loading pending songs:', err);
-      setError('Failed to load songs for voting. Please try again.');
-    }
-  }, [user]);
+  }, [user, isOnline]);
   
-  // Load both all songs and pending songs
-  const loadSongs = useCallback(async () => {
-    await Promise.all([
-      loadAllSongs(),
-      loadPendingSongs()
-    ]);
-  }, [loadAllSongs, loadPendingSongs]);
-  
-  // Load songs on mount and when user changes
+  // Load songs on mount and when dependencies change
   useEffect(() => {
     if (user) {
       loadSongs();
     }
   }, [user, loadSongs]);
   
-  // Subscribe to realtime changes
+  // Set up real-time subscription when online
   useEffect(() => {
-    if (!user) return;
-    
-    console.log('Setting up Supabase realtime subscriptions');
+    if (!user || !isOnline) return;
     
     // Subscribe to realtime changes
-    const songsSubscription = supabaseClient
-      .channel('songs_channel')
+    const subscription = supabaseClient
+      .channel('songs_changes')
       .on('postgres_changes', 
         { event: '*', schema: 'public', table: 'songs' }, 
-        payload => {
-          console.log('Supabase songs update:', payload);
-          loadSongs();
-        }
-      )
-      .subscribe();
-      
-    const votesSubscription = supabaseClient
-      .channel('votes_channel')
-      .on('postgres_changes', 
-        { event: '*', schema: 'public', table: 'votes' }, 
-        payload => {
-          console.log('Supabase votes update:', payload);
+        () => {
+          // Reload songs when any change occurs
           loadSongs();
         }
       )
       .subscribe();
     
-    // Cleanup subscriptions
+    // Cleanup subscription
     return () => {
-      console.log('Cleaning up Supabase subscriptions');
-      supabaseClient.removeChannel(songsSubscription);
-      supabaseClient.removeChannel(votesSubscription);
+      supabaseClient.removeChannel(subscription);
     };
-  }, [user, loadSongs]);
+  }, [user, isOnline, loadSongs]);
   
-  // Function to add a new song - now including YouTube view count
+  // Process offline actions when coming back online
+  useEffect(() => {
+    if (!isOnline || !user) return;
+    
+    const processOfflineActions = async () => {
+      const pendingActions = getOfflineActions('pending');
+      
+      if (pendingActions.length === 0) return;
+      
+      // Request background sync
+      const syncRequested = await requestBackgroundSync('sync-songs');
+      if (!syncRequested) {
+        console.warn('Background sync not supported, manually processing actions');
+        
+        // Process each action manually if background sync not supported
+        for (const action of pendingActions) {
+          try {
+            if (action.type === 'ADD_SONG') {
+              await addSong({
+                title: action.data.title,
+                artist: action.data.artist,
+                notes: action.data.notes || null,
+                youtube_video_id: action.data.youtubeVideoId || null,
+                youtube_title: action.data.youtubeTitle || null,
+                suggested_by: user.id
+              });
+              
+              // Remove from offline queue
+              removeOfflineAction(action.id);
+            }
+            // Note: Vote actions are handled by useVotes hook
+          } catch (error) {
+            console.error(`Error processing offline action ${action.id}:`, error);
+          }
+        }
+        
+        // Reload songs after processing
+        await loadSongs();
+      }
+    };
+    
+    processOfflineActions();
+  }, [isOnline, user, loadSongs]);
+  
+  // Function to add a new song with offline support
   const addNewSong = async (songData) => {
     if (!user) {
       setError('You must be logged in to add a song');
-      return null;
-    }
-    
-    // Check if the user can suggest more songs
-    const { canSuggest, nextDate, suggestionsRemaining } = await checkSuggestionLimit();
-    
-    if (!canSuggest) {
-      const formattedDate = nextDate.toLocaleDateString('en-US', { 
-        weekday: 'long',
-        month: 'long', 
-        day: 'numeric' 
-      });
-      
-      setError(`You've reached your limit of ${MAX_SUGGESTIONS_PER_MONTH} song suggestions in a 30-day period. You can suggest another song on ${formattedDate}.`);
-      return null;
+      return false;
     }
     
     try {
-      // Validate YouTube video ID if present
-      if (songData.youtubeVideoId && !isValidYouTubeVideoId(songData.youtubeVideoId)) {
-        setError('Invalid YouTube video ID');
-        return null;
+      if (isOnline) {
+        // Online: Add directly to database
+        await addSong({
+          title: songData.title,
+          artist: songData.artist,
+          notes: songData.notes || null,
+          youtube_video_id: songData.youtubeVideoId || null,
+          youtube_title: songData.youtubeTitle || null,
+          suggested_by: user.id
+        });
+        
+        // Reload songs to ensure UI is updated
+        await loadSongs();
+      } else {
+        // Offline: Queue for later
+        const actionId = queueOfflineAction({
+          type: 'ADD_SONG',
+          data: {
+            title: songData.title,
+            artist: songData.artist,
+            notes: songData.notes,
+            youtubeVideoId: songData.youtubeVideoId,
+            youtubeTitle: songData.youtubeTitle,
+            userId: user.id
+          }
+        });
+        
+        if (!actionId) {
+          throw new Error('Failed to queue song for offline submission');
+        }
+        
+        // Reload songs to update UI with the new offline song
+        await loadSongs();
       }
       
-      const newSong = await addSong({
-        title: songData.title,
-        artist: songData.artist,
-        notes: songData.notes,
-        youtube_video_id: songData.youtubeVideoId,
-        youtube_title: songData.youtubeTitle,
-        youtube_view_count: songData.youtubeViewCount || null, // Include YouTube view count
-        suggested_by: user.id
-      });
-      
-      // Force reload songs to ensure UI is updated
-      await loadSongs();
-      
-      // After adding, refresh the suggestion count
-      await checkSuggestionLimit();
-      
-      return newSong;
+      return true;
     } catch (err) {
       console.error('Error adding song:', err);
       setError('Failed to add song. Please try again.');
-      return null;
+      return false;
     }
   };
   
-  // Get songs for vote tab (only pending songs)
-  const getSongsToVote = () => {
+  // Function to get songs that haven't been voted on by the current user
+  const getSongsToVote = useCallback(() => {
     if (!user) return [];
     
-    console.log(`Songs available for voting: ${pendingSongs.length} pending songs`);
-    return pendingSongs;
-  };
+    return songs.filter(song => {
+      // Skip songs that have been voted on
+      const hasVoted = song.votedByCurrentUser || 
+                       (song.voters && song.voters.includes(user.id));
+      
+      return !hasVoted;
+    });
+  }, [songs, user]);
   
-  // Get songs sorted by net votes and using YouTube view count as tiebreaker
-  const getSortedSongs = () => {
-    // First sort by netVotes, then by YouTube view count, then by difficulty if available
-    const sorted = [...songs].sort((a, b) => {
-      // Primary sort by net votes (upvotes minus downvotes)
-      const votesDiff = b.netVotes - a.netVotes;
-      
-      // If votes are equal, use YouTube view count as tiebreaker
-      if (votesDiff === 0) {
-        return (b.youtubeViewCount || 0) - (a.youtubeViewCount || 0);
+  // Function to get songs sorted by votes
+  const getSortedSongs = useCallback(() => {
+    return [...songs].sort((a, b) => {
+      // Sort by votes (descending)
+      if (b.votes !== a.votes) {
+        return b.votes - a.votes;
       }
       
-      return votesDiff;
+      // If votes are equal, sort by creation date (newer first)
+      return new Date(b.createdAt) - new Date(a.createdAt);
     });
-    
-    // Apply dense ranking algorithm
-    let currentRank = 1;
-    let previousVotes = sorted.length > 0 ? sorted[0].netVotes : 0;
-    
-    return sorted.map((song, index) => {
-      // If this song has fewer votes than the previous one, increment the rank
-      if (song.netVotes < previousVotes) {
-        currentRank = index + 1;
-        previousVotes = song.netVotes;
-      }
-      
-      return {
-        ...song,
-        rank: currentRank
-      };
-    });
-  };
+  }, [songs]);
   
   return {
-    songs,              // All songs with vote counts (for rankings tab)
-    pendingSongs,       // Songs pending user vote (for vote tab)
+    songs,
     isLoading,
     error,
+    isOnline,
+    offlineActionsCount,
     addNewSong,
-    getSongsToVote,     // Returns pendingSongs
-    getSortedSongs,     // Returns songs sorted by net votes with dense ranking
-    loadSongs,          // Export loadSongs so it can be called from outside
-    
-    // New exports for suggestion limit feature
-    canSuggestMore,
-    userSuggestionCount,
-    nextSuggestionDate,
-    suggestionsRemaining: MAX_SUGGESTIONS_PER_MONTH - userSuggestionCount,
-    maxSuggestionsPerMonth: MAX_SUGGESTIONS_PER_MONTH
+    getSongsToVote,
+    getSortedSongs,
+    loadSongs
   };
 }
