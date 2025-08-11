@@ -1,3 +1,6 @@
+// Add a version timestamp to bust cache
+const iconVersion = `?v=${Date.now()}`;
+
 export const metadata = {
   title: 'RMC Song Wishlist',
   description: 'Share, vote, and discover new songs for RMC Choir',
@@ -6,26 +9,26 @@ export const metadata = {
   creator: 'RMC Choir',
   publisher: 'RMC Choir',
   
-  // Favicon and Icon Configuration
+  // Favicon and Icon Configuration with cache busting
   icons: {
     icon: [
-      { url: '/favicon.ico', sizes: 'any' },
-      { url: '/icons/icon-72x72.png', sizes: '72x72', type: 'image/png' },
-      { url: '/icons/icon-96x96.png', sizes: '96x96', type: 'image/png' },
-      { url: '/icons/icon-128x128.png', sizes: '128x128', type: 'image/png' }
+      { url: `/favicon.ico${iconVersion}`, sizes: 'any' },
+      { url: `/icons/icon-72x72.png${iconVersion}`, sizes: '72x72', type: 'image/png' },
+      { url: `/icons/icon-96x96.png${iconVersion}`, sizes: '96x96', type: 'image/png' },
+      { url: `/icons/icon-128x128.png${iconVersion}`, sizes: '128x128', type: 'image/png' }
     ],
     apple: [
-      { url: '/icons/icon-152x152.png', sizes: '152x152', type: 'image/png' }
+      { url: `/icons/icon-152x152.png${iconVersion}`, sizes: '152x152', type: 'image/png' }
     ],
     other: [
-      { url: '/icons/icon-144x144.png', sizes: '144x144', type: 'image/png' },
-      { url: '/icons/icon-192x192.png', sizes: '192x192', type: 'image/png' },
-      { url: '/icons/icon-512x512.png', sizes: '512x512', type: 'image/png' }
+      { url: `/icons/icon-144x144.png${iconVersion}`, sizes: '144x144', type: 'image/png' },
+      { url: `/icons/icon-192x192.png${iconVersion}`, sizes: '192x192', type: 'image/png' },
+      { url: `/icons/icon-512x512.png${iconVersion}`, sizes: '512x512', type: 'image/png' }
     ]
   },
   
   // PWA Configuration
-  manifest: '/manifest.json',
+  manifest: `/manifest.json${iconVersion}`,
   
   // Theme and App Configuration
   themeColor: '#4f46e5',
@@ -48,7 +51,7 @@ export const metadata = {
     description: 'Share, vote, and discover new songs for RMC Choir',
     images: [
       {
-        url: '/icons/icon-512x512.png',
+        url: `/icons/icon-512x512.png${iconVersion}`,
         width: 512,
         height: 512,
         alt: 'RMC Song Wishlist Logo'
@@ -61,7 +64,7 @@ export const metadata = {
     card: 'summary',
     title: 'RMC Song Wishlist',
     description: 'Share, vote, and discover new songs for RMC Choir',
-    images: ['/icons/icon-512x512.png']
+    images: [`/icons/icon-512x512.png${iconVersion}`]
   },
   
   // Viewport Configuration
@@ -75,7 +78,7 @@ export const metadata = {
   // Additional Meta Tags
   other: {
     'msapplication-TileColor': '#4f46e5',
-    'msapplication-TileImage': '/icons/icon-144x144.png'
+    'msapplication-TileImage': `/icons/icon-144x144.png${iconVersion}`
   }
 };
 
@@ -83,12 +86,17 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <head>
-        {/* Additional manual meta tags if needed */}
+        {/* Additional manual meta tags for PWA */}
         <meta name="application-name" content="RMC Songs" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="RMC Songs" />
+        
+        {/* Force fresh icon loading */}
+        <link rel="icon" href={`/favicon.ico${iconVersion}`} sizes="any" />
+        <link rel="apple-touch-icon" href={`/icons/icon-152x152.png${iconVersion}`} />
+        <link rel="manifest" href={`/manifest.json${iconVersion}`} />
         
         {/* Preconnect to improve performance */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
