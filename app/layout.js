@@ -1,38 +1,102 @@
+export const metadata = {
+  title: 'RMC Song Wishlist',
+  description: 'Share, vote, and discover new songs for RMC Choir',
+  keywords: ['RMC', 'choir', 'songs', 'music', 'wishlist', 'voting'],
+  authors: [{ name: 'RMC Choir' }],
+  creator: 'RMC Choir',
+  publisher: 'RMC Choir',
+  
+  // Favicon and Icon Configuration
+  icons: {
+    icon: [
+      { url: '/favicon.ico', sizes: 'any' },
+      { url: '/icons/icon-72x72.png', sizes: '72x72', type: 'image/png' },
+      { url: '/icons/icon-96x96.png', sizes: '96x96', type: 'image/png' },
+      { url: '/icons/icon-128x128.png', sizes: '128x128', type: 'image/png' }
+    ],
+    apple: [
+      { url: '/icons/icon-152x152.png', sizes: '152x152', type: 'image/png' }
+    ],
+    other: [
+      { url: '/icons/icon-144x144.png', sizes: '144x144', type: 'image/png' },
+      { url: '/icons/icon-192x192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/icons/icon-512x512.png', sizes: '512x512', type: 'image/png' }
+    ]
+  },
+  
+  // PWA Configuration
+  manifest: '/manifest.json',
+  
+  // Theme and App Configuration
+  themeColor: '#4f46e5',
+  colorScheme: 'light',
+  
+  // Mobile App Configuration
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'RMC Songs'
+  },
+  
+  // Open Graph (Social Media Sharing)
+  openGraph: {
+    type: 'website',
+    locale: 'en_US',
+    url: 'https://your-domain.com',
+    siteName: 'RMC Song Wishlist',
+    title: 'RMC Song Wishlist',
+    description: 'Share, vote, and discover new songs for RMC Choir',
+    images: [
+      {
+        url: '/icons/icon-512x512.png',
+        width: 512,
+        height: 512,
+        alt: 'RMC Song Wishlist Logo'
+      }
+    ]
+  },
+  
+  // Twitter Card Configuration
+  twitter: {
+    card: 'summary',
+    title: 'RMC Song Wishlist',
+    description: 'Share, vote, and discover new songs for RMC Choir',
+    images: ['/icons/icon-512x512.png']
+  },
+  
+  // Viewport Configuration
+  viewport: {
+    width: 'device-width',
+    initialScale: 1,
+    maximumScale: 1,
+    userScalable: false
+  },
+  
+  // Additional Meta Tags
+  other: {
+    'msapplication-TileColor': '#4f46e5',
+    'msapplication-TileImage': '/icons/icon-144x144.png'
+  }
+};
+
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <head>
-        {/* Basic meta tags */}
-        <meta charSet="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-        <meta name="theme-color" content="#4f46e5" media="(prefers-color-scheme: light)" />
-        <meta name="theme-color" content="#312e81" media="(prefers-color-scheme: dark)" />
-        <meta name="description" content="RMC Song Wishlist - Suggest, vote, and discover songs for the choir" />
-
-        {/* iOS-specific meta tags */}
+        {/* Additional manual meta tags if needed */}
+        <meta name="application-name" content="RMC Songs" />
+        <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="RMC Songs" />
-        <meta name="apple-touch-fullscreen" content="yes" />
-        <meta name="format-detection" content="telephone=no" />
-
-        {/* iOS icon links */}
-        <link rel="apple-touch-icon" href="/icons/ios/apple-icon-180x180.png" />
-        <link rel="apple-touch-icon" sizes="152x152" href="/icons/ios/apple-icon-152x152.png" />
-        <link rel="apple-touch-icon" sizes="180x180" href="/icons/ios/apple-icon-180x180.png" />
-        <link rel="apple-touch-icon" sizes="167x167" href="/icons/ios/apple-icon-167x167.png" />
-
-        {/* Add the iOS splash screens and other meta tags from the provided configuration */}
         
-        {/* Standard web app manifest */}
-        <link rel="manifest" href="/manifest.json" />
-
-        {/* Favicon */}
-        <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon/favicon-32x32.png" />
-        <link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon/favicon-16x16.png" />
-        <link rel="shortcut icon" href="/icons/favicon/favicon.ico" />
+        {/* Preconnect to improve performance */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
       </head>
-      <body>{children}</body>
+      <body>
+        {children}
+      </body>
     </html>
   );
 }
