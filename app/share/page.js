@@ -1,6 +1,7 @@
 'use client';
 
 import React, { Suspense } from 'react';
+import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Share2, Copy, Check, Music, Heart, Users } from 'lucide-react';
 
@@ -279,7 +280,7 @@ const ShareContent = () => {
           }}>
             Want to suggest songs and vote? Join our song wishlist!
           </p>
-          <a
+          <Link
             href="/"
             style={{
               display: 'inline-block',
@@ -302,7 +303,7 @@ const ShareContent = () => {
             }}
           >
             Open RMC Song Wishlist
-          </a>
+          </Link>
         </div>
       </div>
     </div>
