@@ -1,338 +1,153 @@
+// app/offline/page.js
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import { WifiOff, RefreshCw, Music, ArrowLeft } from 'lucide-react';
-import { getCachedSongs, getOfflineUser, getPendingActionCount } from '../../utils/offlineStorage';
+import React from 'react';
+import { Wifi, WifiOff, RefreshCw } from 'lucide-react';
 
-export default function OfflinePage() {
-  const [offlineUser, setOfflineUser] = useState(null);
-  const [cachedSongs, setCachedSongs] = useState([]);
-  const [pendingActions, setPendingActions] = useState(0);
-  const [lastOnline, setLastOnline] = useState(null);
-  const [isRetrying, setIsRetrying] = useState(false);
-
-  useEffect(() => {
-    // Retrieve offline data
-    const user = getOfflineUser();
-    const songs = getCachedSongs();
-    const actionCount = getPendingActionCount();
-    
-    setOfflineUser(user);
-    setCachedSongs(songs || []);
-    setPendingActions(actionCount);
-    
-    // Get last online timestamp
-    const lastOnlineStr = localStorage.getItem('rmc_last_online');
-    if (lastOnlineStr) {
-      setLastOnline(new Date(parseInt(lastOnlineStr, 10)));
-    }
-  }, []);
-
-  const handleRetryConnection = () => {
-    setIsRetrying(true);
-    
-    // Try to fetch a simple resource to check connectivity
-    fetch('/manifest.json', { 
-      method: 'HEAD',
-      cache: 'no-store' 
-    })
-      .then(() => {
-        // If successful, we're back online
-        window.location.href = '/';
-      })
-      .catch(() => {
-        // Still offline
-        setIsRetrying(false);
-      });
-      
-    // Set a timeout to stop the retry indicator if it takes too long
-    setTimeout(() => {
-      setIsRetrying(false);
-    }, 5000);
-  };
-
-  const goBack = () => {
-    // Use history API to go back if possible
-    if (window.history && window.history.length > 1) {
-      window.history.back();
-    } else {
-      // Otherwise try to navigate to the home page
-      window.location.href = '/';
-    }
+const OfflinePage = () => {
+  const handleRefresh = () => {
+    window.location.reload();
   };
 
   return (
     <div style={{
       minHeight: '100vh',
-      background: 'linear-gradient(to bottom, #eef2ff, #ffffff, #eef2ff)',
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
-      padding: '24px 16px',
-      color: '#1f2937'
+      justifyContent: 'center',
+      background: 'linear-gradient(to bottom, #eef2ff, #ffffff, #eef2ff)',
+      padding: '20px',
+      textAlign: 'center'
     }}>
       <div style={{
-        width: '100%',
-        maxWidth: '480px'
+        background: 'white',
+        padding: '40px',
+        borderRadius: '16px',
+        boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)',
+        maxWidth: '400px',
+        width: '100%'
       }}>
-        {/* Header */}
-        <header style={{
-          marginBottom: '24px',
+        <div style={{
+          width: '80px',
+          height: '80px',
+          borderRadius: '50%',
+          background: 'linear-gradient(135deg, #ef4444, #dc2626)',
           display: 'flex',
-          flexDirection: 'column',
           alignItems: 'center',
-          textAlign: 'center'
+          justifyContent: 'center',
+          margin: '0 auto 24px'
         }}>
-          <div style={{
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            width: '80px',
-            height: '80px',
-            borderRadius: '50%',
-            background: '#fee2e2',
-            marginBottom: '16px',
-            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-          }}>
-            <WifiOff size={40} color="#ef4444" />
-          </div>
-          
-          <h1 style={{
-            fontSize: '24px',
-            fontWeight: '700',
-            color: '#1f2937',
+          <WifiOff size={40} color="white" />
+        </div>
+        
+        <h1 style={{
+          fontSize: '24px',
+          fontWeight: 'bold',
+          color: '#dc2626',
+          marginBottom: '16px'
+        }}>
+          You&apos;re Offline
+        </h1>
+        
+        <p style={{
+          color: '#6b7280',
+          marginBottom: '24px',
+          lineHeight: '1.6'
+        }}>
+          It looks like you&apos;re not connected to the internet right now. 
+          Please check your connection and try again.
+        </p>
+        
+        <div style={{
+          background: '#fef2f2',
+          border: '1px solid #fecaca',
+          borderRadius: '8px',
+          padding: '16px',
+          marginBottom: '24px'
+        }}>
+          <h3 style={{
+            fontSize: '16px',
+            fontWeight: '600',
+            color: '#dc2626',
             marginBottom: '8px'
           }}>
-            You're Offline
-          </h1>
-          
-          <p style={{
-            fontSize: '16px',
-            color: '#4b5563',
-            marginBottom: '16px',
-            maxWidth: '380px'
-          }}>
-            Unable to connect to the RMC Song Wishlist. Please check your internet connection.
-          </p>
-          
-          <div style={{
-            display: 'flex',
-            gap: '12px'
-          }}>
-            <button 
-              onClick={goBack}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '8px',
-                padding: '10px 16px',
-                background: 'white',
-                color: '#4f46e5',
-                border: '1px solid #e0e7ff',
-                borderRadius: '8px',
-                fontWeight: '500',
-                fontSize: '14px',
-                cursor: 'pointer',
-                boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)'
-              }}
-            >
-              <ArrowLeft size={16} />
-              Go Back
-            </button>
-            
-            <button 
-              onClick={handleRetryConnection}
-              disabled={isRetrying}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '8px',
-                padding: '10px 16px',
-                background: 'linear-gradient(to right, #4f46e5, #2563eb)',
-                color: 'white',
-                border: 'none',
-                borderRadius: '8px',
-                fontWeight: '500',
-                fontSize: '14px',
-                cursor: isRetrying ? 'not-allowed' : 'pointer',
-                boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
-              }}
-            >
-              <RefreshCw 
-                size={16} 
-                style={{
-                  animation: isRetrying ? 'spin 1s linear infinite' : 'none'
-                }}
-              />
-              {isRetrying ? 'Retrying...' : 'Try Again'}
-            </button>
-          </div>
-        </header>
-
-        {/* Offline Status Section */}
-        <div style={{
-          background: 'white',
-          borderRadius: '12px',
-          padding: '16px',
-          marginBottom: '24px',
-          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
-        }}>
-          <h2 style={{
-            fontSize: '16px',
-            fontWeight: '600',
-            marginBottom: '12px',
-            color: '#4338ca',
-            display: 'flex',
-            alignItems: 'center'
-          }}>
-            <Music size={16} style={{ marginRight: '8px' }} />
-            Offline Status
-          </h2>
-          
-          <div style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '8px'
-          }}>
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              padding: '8px 0',
-              borderBottom: '1px solid #e5e7eb'
-            }}>
-              <span style={{ color: '#6b7280', fontSize: '14px' }}>Logged in as</span>
-              <span style={{ color: '#1f2937', fontWeight: '500', fontSize: '14px' }}>
-                {offlineUser?.name || 'Not logged in'}
-              </span>
-            </div>
-            
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              padding: '8px 0',
-              borderBottom: '1px solid #e5e7eb'
-            }}>
-              <span style={{ color: '#6b7280', fontSize: '14px' }}>Cached songs</span>
-              <span style={{ color: '#1f2937', fontWeight: '500', fontSize: '14px' }}>
-                {cachedSongs.length}
-              </span>
-            </div>
-            
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              padding: '8px 0',
-              borderBottom: '1px solid #e5e7eb'
-            }}>
-              <span style={{ color: '#6b7280', fontSize: '14px' }}>Pending actions</span>
-              <span style={{ 
-                color: pendingActions > 0 ? '#4f46e5' : '#1f2937', 
-                fontWeight: pendingActions > 0 ? '600' : '500',
-                fontSize: '14px'
-              }}>
-                {pendingActions}
-              </span>
-            </div>
-            
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              padding: '8px 0'
-            }}>
-              <span style={{ color: '#6b7280', fontSize: '14px' }}>Last online</span>
-              <span style={{ color: '#1f2937', fontWeight: '500', fontSize: '14px' }}>
-                {lastOnline ? 
-                  lastOnline.toLocaleString(undefined, {
-                    dateStyle: 'short',
-                    timeStyle: 'short'
-                  }) : 
-                  'Unknown'
-                }
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* What You Can Do Section */}
-        <div style={{
-          background: 'white',
-          borderRadius: '12px',
-          padding: '16px',
-          marginBottom: '24px',
-          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
-        }}>
-          <h2 style={{
-            fontSize: '16px',
-            fontWeight: '600',
-            marginBottom: '12px',
-            color: '#4338ca'
-          }}>
-            What You Can Do Offline
-          </h2>
-          
+            What you can do:
+          </h3>
           <ul style={{
-            paddingLeft: '28px',
-            marginBottom: '0'
+            color: '#991b1b',
+            fontSize: '14px',
+            listStyle: 'none',
+            padding: 0,
+            margin: 0
           }}>
-            {offlineUser ? (
-              <>
-                <li style={{ 
-                  color: '#4b5563', 
-                  fontSize: '14px', 
-                  marginBottom: '8px' 
-                }}>
-                  View cached songs (might not be the most recent)
-                </li>
-                <li style={{ 
-                  color: '#4b5563', 
-                  fontSize: '14px', 
-                  marginBottom: '8px' 
-                }}>
-                  Suggest new songs (will be submitted when you're back online)
-                </li>
-                <li style={{ 
-                  color: '#4b5563', 
-                  fontSize: '14px', 
-                  marginBottom: '8px' 
-                }}>
-                  Vote for songs (votes will be synced when connection is restored)
-                </li>
-                <li style={{ 
-                  color: '#4b5563', 
-                  fontSize: '14px' 
-                }}>
-                  Check rankings based on cached data
-                </li>
-              </>
-            ) : (
-              <li style={{ 
-                color: '#4b5563', 
-                fontSize: '14px' 
-              }}>
-                You need to log in when online to use offline features
-              </li>
-            )}
+            <li style={{ marginBottom: '4px' }}>• Check your Wi-Fi connection</li>
+            <li style={{ marginBottom: '4px' }}>• Try switching to mobile data</li>
+            <li style={{ marginBottom: '4px' }}>• Refresh the page when you&apos;re back online</li>
           </ul>
         </div>
-
-        {/* Note */}
+        
+        <button
+          onClick={handleRefresh}
+          style={{
+            width: '100%',
+            padding: '12px 24px',
+            background: 'linear-gradient(135deg, #3b82f6, #2563eb)',
+            color: 'white',
+            border: 'none',
+            borderRadius: '8px',
+            fontSize: '16px',
+            fontWeight: '500',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+            transition: 'all 0.2s ease'
+          }}
+          onMouseOver={(e) => {
+            e.target.style.background = 'linear-gradient(135deg, #2563eb, #1d4ed8)';
+            e.target.style.transform = 'translateY(-2px)';
+          }}
+          onMouseOut={(e) => {
+            e.target.style.background = 'linear-gradient(135deg, #3b82f6, #2563eb)';
+            e.target.style.transform = 'translateY(0)';
+          }}
+        >
+          <RefreshCw size={18} />
+          Try Again
+        </button>
+        
         <div style={{
-          background: '#eef2ff',
+          marginTop: '24px',
+          padding: '16px',
+          background: '#f0f9ff',
           borderRadius: '8px',
-          padding: '12px',
-          border: '1px solid #c7d2fe'
+          border: '1px solid #bae6fd'
         }}>
-          <p style={{
-            fontSize: '14px',
-            color: '#4338ca',
-            margin: '0'
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginBottom: '8px'
           }}>
-            Note: This app works best with an internet connection. Your changes will be synchronized once you're back online.
+            <Wifi size={16} style={{ marginRight: '8px', color: '#0ea5e9' }} />
+            <span style={{ fontSize: '14px', fontWeight: '500', color: '#0369a1' }}>
+              Connection Status
+            </span>
+          </div>
+          <p style={{ 
+            fontSize: '12px', 
+            color: '#0369a1', 
+            margin: 0 
+          }}>
+            RMC Choir Song Wishlist works best with an internet connection. 
+            Some features may not be available while offline.
           </p>
         </div>
       </div>
     </div>
   );
-}
+};
+
+export default OfflinePage;
